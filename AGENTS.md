@@ -10,24 +10,25 @@ Build **Prudence**: a local LLM gateway daemon (`localhost:8787`, binary
 `pru`) that intercepts agent traffic (Claude Code via `ANTHROPIC_BASE_URL`,
 Codex/OpenAI-compat via `OPENAI_BASE_URL`). Pru is the **cost-optimization
 layer for AI agents** — not merely a firewall, not a scheduler. The moat is
-the bundle: request-path enforcement (Meter Watch) + 50%-off batch execution
-(Graveyard Shift) + a savings ledger (Tallies).
+the bundle: request-path enforcement (Meter Watch) + compression + 50%-off
+batch execution (Graveyard Shift) + a savings ledger (Tallies).
 
 Product order: Meter Watch first; Graveyard Shift second.
 
-**Positioning rule:** any user-facing or marketing text must frame value as
-*savings*, not surveillance. Scheduling features must always carry the batch
-discount — never build "just run it at night"; it's "run it at half price."
+**Positioning rule:** all user-facing text frames value as *savings*, not
+surveillance. Night features must always carry the batch discount — never
+"just run it at night"; it's "run it at half price."
 
 ## Identity and verified assets (fixed facts — do not change)
 
 - Product: **Prudence** · CLI binary: `pru`
-- npm: `prudence-cli` (primary, published 0.0.1 placeholder) · `pru-cli`
-  (alias placeholder) · **never reference the `@pru` scope — taken by a
-  dormant third party**
-- Repo: `github.com/prudence-cli/prudence` — **private until F4 hardening**;
-  flip to public + add LICENSE (MIT vs BSL, owner's call) as part of launch
-- Install UX target: `curl -fsSL prudence.sh/install.sh | sh`
+- npm: `prudence-cli` (primary) · `pru-cli` (alias) — both claimed
+- **Never reference the `@pru` scope — taken by a dormant third party**
+- Repo: `github.com/prudence-cli/prudence` — **private until F4**; flip
+  public + LICENSE (MIT vs BSL, owner's call) at launch
+- Install UX target: `curl -fsSL prudence.sh/install.sh | sh` (domain
+  purchase is pending — do not print this URL in shipped/committed user-facing
+  artifacts until the owner confirms registration)
 
 ## Voice (generate on-brand copy by default)
 
@@ -36,22 +37,27 @@ discount — never build "just run it at night"; it's "run it at half price."
   - Budget exhausted: `Pru closed the ledger for this session ($X.XX spent).`
   - Loop guard: `Pru noticed circular spending: same call N× ($Y.YY).`
   - Savings: `Pru set aside $X.XX last night.`
-- Banned in UX copy: emoji in error paths, exclamation marks, apologetic or
-  cutesy tone, the word "oops".
+  - Compression: `Pru trimmed N tokens of noise before billing.`
+- Banned: emoji in error paths, exclamation marks, apologetic/cutesy tone,
+  the word "oops".
 - Naming map: firewall → Meter Watch · night batch → Graveyard Shift ·
   savings → Tallies · history → the Ledger.
 
-## Competitive guardrails (from plan §0)
+## Competitive guardrails (from plan §0 — read it first)
 
-- Runcap exists: local proxy + hard cap + 429. Parity on caps is mandatory;
-  differentiation = loop-guard UX, multi-upstream, tallies.
+- **Runcap** (`kirder24-code/ai-agent-manager`, MIT) ships: local gateway,
+  request-path hard caps, pre-flight estimation, **token compression**,
+  **Proof Gate** PR verification. Parity on caps+estimation+compression is
+  mandatory. Its MIT license permits studying/reusing its techniques — in F1,
+  clone and study its source for base-URL interception, estimation edge cases,
+  and session detection; add a NOTICE attribution.
 - ccusage/usage-monitors are read-only — never ship a monitoring-only feature
   and call it value.
 - Anthropic Routines / Dreamer own night *scheduling* — our night feature
   exists ONLY as batch-priced execution. If a night feature can't show the
-  50% savings, redesign it.
-- Standing rule: before implementing any new feature, verify it doesn't
-  collapse into an incumbent (plan §0). Log the conclusion in PROGRESS.md.
+  50% savings math, redesign it.
+- Standing rule: before implementing any new feature, verify against §0 that
+  it doesn't collapse into an incumbent; log the conclusion in PROGRESS.md.
 
 ## Hard conventions (do not deviate without asking)
 
@@ -66,6 +72,9 @@ discount — never build "just run it at night"; it's "run it at half price."
   tap. If parsing lags, parsing degrades — the stream never does.
 - **Transparent by default**: with no rules configured, behavior is
   byte-identical passthrough.
+- **Compression must be conservative and provable**: strip-list only (logs,
+  stack traces, repeated JSON), `min_save_tokens` threshold, off-switch per
+  rule, unit tests proving no semantic damage via echo-mock.
 - **Local-first, zero telemetry** unless explicitly opt-in.
 - Schema lives in §1.3 of the plan doc. Migrations as numbered SQL files.
 
@@ -75,40 +84,38 @@ discount — never build "just run it at night"; it's "run it at half price."
 src/
   server/      # Hono app, route handlers (/v1/messages, /v1/*)
   proxy/       # forwarder, SSE tap, auth replacement
-  rules/       # ledger rules engine (budget, rate_limit, loop_guard)
+  rules/       # ledger rules engine (budget, rate_limit, loop_guard, compression)
+  compress/    # token-compression pass (parity vs Runcap)
   store/       # sqlite layer, migrations, txn helpers
   pricing/     # price table, estimators
   cli/         # `pru` commands (commander)
   graveyard/   # product 2 (later): snapshotter, diff_builder, batch_client
 tests/
-  fixtures/    # recorded SSE streams + requests (see Testing)
+  fixtures/    # recorded SSE streams + requests
   *.test.ts
 install.sh
+NOTICE           # third-party attributions (incl. Runcap study notes)
 ```
 
 ## Testing rules (critical for agent verification)
 
-- **Never call a real LLM API in tests.** All upstreams mocked: a local mock
-  server replaying SSE fixtures from `tests/fixtures/`.
-- Fixtures: capture real request/response streams early (record one live
-  Claude Code session, anonymize, commit as fixture). Every rules-engine test
-  replays fixtures.
-- Each phase has acceptance criteria in the plan doc (§2.6, §3.6). A phase is
-  DONE only when: acceptance criteria pass **and** `bun test` green **and** a
-  manual smoke note is added to `PROGRESS.md`.
+- **Never call a real LLM API in tests.** Mock upstreams replay SSE fixtures.
+- Fixtures: capture real agent traffic early (record one live Claude Code
+  session, anonymize, commit). Every rules-engine test replays fixtures.
+- Phase DONE = acceptance criteria pass (plan §2.6/§3.6) **and** `bun test`
+  green **and** smoke note in PROGRESS.md.
 - Mid-stream abort test is mandatory: kill client connection during fixture
   replay → DB consistent, reservation released, row marked `aborted`.
 
 ## Current task
 
 See `PROGRESS.md` → "NEXT". Resume from there; do not restart completed
-phases. (NOTE: phase F0 — human test-drive of Runcap — precedes F1.)
+phases. (**F0 — human test-drive of Runcap — precedes F1 and is owner-done.**)
 
 ## Progress log
 
-Update `PROGRESS.md` at the end of every session: what was built, which
-acceptance criterion was verified, how (test name or manual steps), what is
-NEXT.
+Update `PROGRESS.md` every session: what was built, which acceptance
+criterion was verified, how, what is NEXT.
 
 ## Explicit non-goals (do not build until told)
 
