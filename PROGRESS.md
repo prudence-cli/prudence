@@ -1,22 +1,26 @@
-# PRU PROGRESS FILE — v1.0
-**The Living Audit| This file holds Prudence's state between sessions. An agent (or Ronny) reading this file cold should be able to resume work within five minutes. Updated: 2026-09-11 (Day 1 — Field Day)**
+# PRU PROGRESS FILE — v2.0
+**The Living Audit | This file holds Prudence's state between sessions. An agent (or Ronny) reading this file cold should be able to resume work within five minutes. Updated: 2026-09-11 (Day 1 — Field Day + the Inside-Tools Decision)**
 
 ---
 
 ## 1. THE THESIS
 
-**Prudence (Pru)** — privacy-first desktop AI budgeting app + agent framework. Agents run dry (money, tokens, tool calls) or go rogue; nobody watches. Pru watches everything and answers one question everything else dodges: **"How much did that just cost me — and should it have run at all?"**
+**Prudence (Pru)** — the accountant that lives **inside** the agent tools people already use (Claude Code, Codex CLI, Cursor). Privacy-first, BYOK, ledger-first. Agents run dry (money, tokens, tool calls) or go rogue; nobody watches. Pru watches everything and answers one question everything else dodges: **"How much did that just cost me — and should it have run at all?"**
 
 Birds are their own accountants. Pru has hers open from token zero. 🐦
 
-### Three planes (deliberate duality)
+### Three planes (revision 2 — locked 2026-09-11 evening)
 | Plane | What it is | Status |
 |---|---|---|
-| **1: App** | Prudence cost/budget control for agent sessions (INV-001) | scaffolded, no backend |
-| **2: Harness** | Pru agent framework — own CLI/TUI, own runtime, sessions native | concept + competitive evidence |
-| **3: Nut 🌰** | Financial-network moat — find cheapest Claude Subscription Max/Business usage routes for customers (INV-002, Q6 open) | brainstorming, NOT SPECCED |
+| **1: Ledger daemon + surfaces** | SQLite bookkeeper + relay + MCP/slash packs living inside Claude Code & Codex | v0.1 target |
+| **2: Night Shift** | Headless overnight runs any CLI drives; Pru keeps receipts; morning digest in the harness the user already stares at | flagship story, rides on Plane 1 |
+| **3: Nut 🌰** | Financial-network moat — cheapest Claude Subscription Max/Business usage routes (INV-002, Q6 open) | brainstorming, NOT SPECCED |
 
-Plane 3 is the reason this project is attempted rather than merely made.
+**Demoted:** own-CLI/TUI agent harness (old Plane 2). Rationale: Boiler 13 (never rebuild OpenCode-by-another-name), KISS+t, founder preference, and the realization that Claude Code/Codex already ARE the UI. Revisit only if hook/MCP APIs prove too leaky (Boiler 13: abstraction leaks = alert).
+
+### Identity pillars (locked)
+1. **The crow voice** — flat, precise, faintly amused; ledger lines when pressed. Every competitor sounds like a dashboard; Prudence sounds like an accountant.
+2. **Night Shift** — agents fly after dark; the user wakes to a receipt queue: spend to the cent, stops + why, ledger verified badge, crow's one-liners. The overnight silent-death scenario is where Runcap-class wrappers cannot follow.
 
 ---
 
@@ -24,136 +28,176 @@ Plane 3 is the reason this project is attempted rather than merely made.
 
 1. KISS+t | 2. Simplest code | 3. No backward-compat hoarding — break UI, change API, keep PRU 5% brain, budget remaining cognition for architecture/systems; personality system at most once/day
 4. **<=5 changes/PR; LINEAR ISSUES MUST BE DONE AND PR MERGED** (Linear only when sync pilot exists; GitHub Projects until then) | 5. Style defined at scaffold time; zsh: dont check nothing you know was good
-6. **TO-DO barriers with named owners — never anonymous** | 7. Project Vandalism = point of no return | 8. Coding agent runs PRU code EVERY TIME | 9. Human+ledger decide enforcement, not the agent | 10. Sessions start empty, never inherit spend | 11. Ledgers before routing logic | 12.yman approval for sideways/Noct until demo
+6. **TO-DO barriers with named owners — never anonymous** | 7. Project Vandalism = point of no return | 8. Coding agent runs PRU code EVERY TIME | 9. Human+ledger decide enforcement, not the agent | 10. Sessions start empty, never inherit spend | 11. Ledgers before routing logic | 12. Yeman approval for sideways/Noct until demo
 13. Never rebuild OpenCode — celebrate it; abstraction leaks = alert | 14. **Perfection is a lie; shipped imperfection with honest ledger is truth** | 15. Ignore similar solutions until proving Prudence 1% cheaper
 16. Explicit terminals > freewheeling — Pru PAUSES at first meaningful Fiat money event | 17. Strategy through contradiction: public receipts | 18. Sudden-protocol sections in AGENTS.md style guide active from repo init
 19. Dev landing page exists from day one (prudence.money, dark crow + copper palette) | 20. nut = thinking out loud only until real spec | 21. Agents get USD ceilings + hard stop + residual bucket; per-agent Leaky Bucket: session can refuse; decisions audited
-22. Agents switch models only by pointer class. visible reason | 23. Branch:codex/* only; no PR without human+bill awareness | 24. **Pru never hangs — every refusal is loud, instant, explains itself** (engraved 9/11/26 Field Day)
-25. **Refusals are typed events, not exit codes** — every surface renders from the same ledger row (engraved 9/11/26)
+22. Agents switch models only by pointer class; visible reason | 23. Branch:codex/* only; no PR without human+bill awareness | 24. **Pru never hangs — every refusal is loud, instant, explains itself** (engraved 9/11/26)
+25. **Refusals are typed events, not exit codes** — every surface renders the same ledger row (engraved 9/11/26)
 
-> Codenames: birds food || accounting things || dead comedian mimes. NO BEE PRODUCTS. NO EVIL BIRDS. NO GRAY PLUMAGE BIRDS. Pru is a crow. Voice: flat, precise, faintly amused, drops ledger lines when pressed.
+> Codenames: birds food || accounting things || dead comedian mimes. NO BEE PRODUCTS. NO EVIL BIRDS. NO GRAY PLUMAGE BIRDS. Pru is a crow.
 
 ---
 
 ## 3. LEGAL / STRATEGY STATUS
 
-- **ByteDance "Prudence" US TM research**: serial 79309161 in *IC 042 (SaaS component-heavy buying)*, status **DEAD as of 2024** → green
-- **OLSHAN LLP "PRUDENCE"** (IC 036, online financial trading platform): **LIVE** → distinguish by market (agent-budget ledger for AI desktop app ≠ trading platform), keep trademark watch
-- **getprudence.ai**: taken (redirects to setstone.work, weak/dormant mark)
-- **IC 009 vs IC 036 overlap to resolve**; recommended: filing target *Q4 2026* via agent, **pending legal review**
-- BYOK = central legal moat: Prudence never holds customer keys
-- Positional defense: data gravity + honesty trumps first-mover; they API-rebind, **we own the accounting the binding produces**
-- OS lock **ON SUCCESS ONLY** (solo first, Linear/GitHub sync pilot); public receipts posture → Busker Protocol: perform live features under Moniker
+- **ByteDance "Prudence" US TM research**: serial 79309161 in *IC 042*, status **DEAD as of 2024** → green
+- **OLSHAN LLP "PRUDENCE"** (IC 036, online trading platform): **LIVE** → distinguish by market; keep trademark watch
+- **getprudence.ai**: taken (redirects to setstone.work, weak/dormant)
+- **IC 009 vs IC 036 overlap to resolve**; filing target *Q4 2026*, **pending legal review**
+- BYOK = central legal moat: Pru never holds customer keys
+- Positional defense: data gravity + honesty > first-mover; they API-rebind, **we own the accounting**
+- OS lock **ON SUCCESS ONLY**; public receipts → Busker Protocol: perform live features under Moniker
 
-Repo: github.com/ronny-sanchezMerino/Prudence --- **LIVE** ✅ (private; solo until pilot)
+Repo: github.com/ronny-sanchezMerino/Prudence — **LIVE** ✅ (private; solo until pilot)
 
 ---
 
-## 4. ARCHITECTURE (Corey, locked)
+## 4. ANATOMY (Corey — revision 2, locked 2026-09-11 evening)
 
 ```
-Stack (battle-tested over flash, except where research says youngest):
-- Python 3.8 core (standard, no leaner taken) ┃ shipped V runtime when satisfied
-- TUI: textual | Web: Flutter/Dart | DB:
-- SQLite+WAL (leads to ClickHouse big-O later) ┃ canonical
-  usage_ledger.proto team-use handoff
-- macOS dmg signing/notarization: BLOCKER until $99 Apple Dev + Sideways approval
-- Day-1 dashboard surfaces: current envelope, fuel, savings-per-session,
-  top-3 session cost reasons -- ledger-driven, never projecting beyond truth
-- Pru CLI (pru run/sessions/parity) — sessions are owned, never wrapped-around
-  foreign agents as primary path (gateway exists as secondary relay for
-  other vendors' CLIs, where env interception is their boundary respect)
-- Parity check: diff ledger vs fund → pry corruption, structurally impossible
-  in-side but audited anyway
-Principles: every response carries prudence_id (trace from fund to response,
- not from wrapper hope); agent classification: fast_gate|sensor|reasoner|
- synth_gate|verifier; Current Pointers Database (envelope); per-agent
- Leaky Bucket; v1 push routing to Direct API (subscription relay, later)
+Pru v0.1 =
+
+ 1. LEDGER DAEMON (the product)
+    - SQLite + WAL, append-only; schemas: usage_ledger, cap_state, session, refusal_events
+    - Append-only JSONL mirrors (audit integrity, ccusage-style familiarity)
+    - Replay: same relayed session twice → ledgers must match (v0.1 checkpoint)
+
+ 2. RELAY — local reverse proxy (the hard stop)
+    - Claude Code via ANTHROPIC_BASE_URL, Codex via OPENAI_BASE_URL
+    - Pre-call estimate → budget check → 429-with-typed-reason on breach →
+      pass-through + post-call actuals recorded (usage tokens from response)
+    - Fail-closed if keys missing; LOUD 429 body designed for the CLI to print
+      ("$X spent of $Y/day — continue with: pru cap set day Z")
+
+ 3. IN-HARNESS PACK (the voice — where Pru is FELT)
+    Claude Code:  .claude/commands/pru:*.md slash pack (/pru:status, /pru:cap,
+                  /pru:nightshift, /pru:verify, /pru:report)
+                  MCP server (tools: ledger_read, cap_set, envelope_report,
+                  nightshift_digest) so the agent can read its own wallet
+                  PreToolUse/UserPromptSubmit hooks gate expensive ACTIONS
+    Codex CLI:    config.toml MCP entry + AGENTS.md engraving
+                  ("Pru wallets are read-only sources of truth; a refusal
+                    means STOP, report, ask human")
+    Honest limit: slash/MCP = visibility + self-restraint + action gating;
+                  ONLY the relay hard-stops the model call itself.
+
+ 4. SHELL SURFACES (ours alone)
+    - pru doctor (heals: every warn ends with the one next command)
+    - pru demo (60s scripted: fake spend → loud fake-cap refusal →
+      replay verify → report. The whole product story before a real key)
+    - pru nightshift digest (morning receipt queue — Plane 2)
+
+Dropped vs rev.1: textual TUI app, Flutter dashboard, native-agent harness.
+Surfaces target: the harness the user already uses + a `--report` HTML export
+(one file, ledger-driven, no server). Keep it audit-shaped.
+
+Risk note: in-harness packs are thin glue on others' APIs — monitor for
+abstraction leaks (Boiler 13). The daemon owns ALL truth and survives
+surface rupture.
 ```
 
-### v0.1: "Prove ledger accuracy" — CHEAPEST FIRST
-- Lands: DB (SQLite), usage_ledger w/ model rates, estimation (alive), enforcement (pause), session state, Current Pointers envelope, CLI skeleton, dashboard invoke
-- **Checkpoint: run same session twice, ledger must match -- then enforcement can exist**
-- Missing scaffolding shown as PENDING red rows with huge to-do within, each named owner
-- Ghost row: "A feature that does not exist is not invisible. It is listed as MISSING with its owner name in red."
+### Feature map (v0.1 → v0.2 → Night Shift)
+
+| Group | Items | Evidence anchor |
+|---|---|---|
+| **Spine** | Native-relayed sessions, append-only ledger w/ per-call rows, `pru ledger verify`, armed-by-default caps, Leaky Bucket + residual jar | F0 §5 all; checkpoint = replay match |
+| **Guards** | Typed refusals 💰🔁🔑☁️ (same row → every surface), stage-aware estimation (envelope context), loop-detection counting refusal-retries, doctor-that-heals | F0 fatals 1,4,5,8 |
+| **Voice layer** | Savings statement per session ("used $0.042 of $0.10; $0.058 to the jar"), MCP wallet-read for agents, `/pru:*` pack, rescue prompts grounded in the refusal record | F0 fatal 3; §5b |
+| **Night Shift** (v0.3) | Headless runs (any CLI as runner), morning digest inside harness + HTML export, replay-verified badge | §1 pillars |
+| **Deferred** | Own TUI/web dashboard, stage-envelope enforcement (needs MCP-declared stages; v0.2 cooperative mode), pointer-class routing (v1, with Direct API push), Nut plane | — |
+
+v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against Claude Code, (c) `/pru:status` answers truth from the daemon, (d) `pru demo` runs end-to-end on a cold machine.
 
 ### Syllabus (Pru as own auditor)
 
 | Task | What | Status |
 |---|---|---|
-| **F0 Runcap test-drive** | rival's actual usage caps, LIVE competitor discoveries | ✅ **DONE** |
-| F1 Sch study Runcap | extract gateway+estimation internals for rejection/comparison → build passthrough proxy | ⬜ NEXT |
-| F2 Relay research | how CLI/Claude Code accepts base URL + handshake shape received -> prudence-serving decisions#353 | ⬜ |
-| F3 LiteLLM-vs-raw fingerprint | task metrics for routing policy | ⬜ |
-| F4 4-thrash | thrash simulation w/ controlled loop+spend scenarios | ⬜ |
-| F5 Wrapper hygiene | thin vs fat boundary (OpenAI, vendor SDKs, BYOK, OAuth) | ⬜ |
-| F6 Pricing delta | our vs real usage, drift alarm | ⬜ |
+| **F0 Runcap test-drive** | rival autopsy, LIVE competitor discoveries | ✅ **DONE** |
+| F1 Runcap source study → relay design | read gateway+estimator+loop internals; produce /docs/runcap-study.md + /docs/relay-design.md (schema mapping JSONL→SQLite rows, ANTHROPIC_BASE_URL interception mechanics, estimate function spec with envelope context) | ⬜ NEXT |
+| F2 Claude Code surface research | slash pack mechanics (.claude/commands), MCP server protocol, hooks, Codex config.toml/AGENTS.md equivalents; produce /docs/in-harness-surface.md | ⬜ |
+| F3 Usage capture accuracy | Anthropic response usage fields vs our accounting; pricing table versioned (F6 merged here) | ⬜ |
+| F4 Thrash simulation | controlled loop+spend scenarios against relay | ⬜ |
+| F5 Wrapper hygiene | thin vs fat boundary (BYOK, OAuth flows, env interception etiquette) | ⬜ the rest merged |
 
 ---
 
 ## 5. F0 — RUNCAP GAP ANALYSIS (2026-09-11, COMPLETE)
 
-Opponent identity: **Joel Hooks** (egghead founder, Badass courses, solo). Tool: **auroradesign/runcap**, MIT (audit green), live payment setup via runcap.ai/setup, Polar.sh monetized. README core promise: "Detect overspend BEFORE it happens" — gateway blocks pre-call, zero trust posture, 429 + machine-readable facts + stop rules in-agent-usable language.
+Opponent: **Joel Hooks** (egghead founder, solo). Tool: **auroradesign/runcap**, MIT (audit green), Polar.sh monetized via runcap.ai/setup. README: "Detect overspend BEFORE it happens."
 
-### ✅ WEAPONS-GRADE (what is true of them)
-- **Pre-send enforcement is REAL**: 429 in 1–7 ms, $0 leaked, $0.05/day cap held perfectly against ~18 retry attempts
-- `gateway-events.jsonl` is beautiful: structured per-call rows — `spentUsd`, `callEstimateUsd`, `truth: "budget_guard"`, `requestHash`, human-readable error strings (e.g., "Budget would be exceeded by this call: $0 spent + ~$0.160075 this call > cap $0.05")
-- Gateway **fail-closes** on missing credentials (refused to proxy unguarded)
-- Dashboard is genuinely product-ambitious: savings odometer, Mission Planner (risk estimate → verifiable missions → model tiers → stop rules pre-burn), fuel metaphor, Plan/Route/Prove/Learn narrative onboarding, per-run rescue framing
-- UX detail worth stealing: copy-pastable "rescue prompt" — guided next action instead of dead end
+### ✅ WEAPONS-GRADE (true of them)
+- **Pre-send enforcement REAL**: 429 in 1–7 ms, $0 leaked, $0.05/day cap held against ~18 retries
+- `gateway-events.jsonl`: beautiful structured rows (spentUsd, callEstimateUsd, truth:"budget_guard", requestHash, human error strings)
+- Fail-closed on missing credentials
+- Product-ambitious dashboard: savings odometer, Mission Planner (risk→missions→tiers→stop rules pre-burn), fuel metaphor, Plan/Route/Prove/Learn onboarding
+- Worth stealing: copy-pastable rescue prompt mechanism
 
 ### ❌ FATAL (their divot = our map)
-1. **The kill is silent**: Claude Code receiving a budget 429 retried ~18× over ~110 s; user perceived a hang with zero output. Their ledger knew exactly why; the user's terminal said nothing.
-2. **Information archipelago**: 3 truth stores (missions/, gateway-events.jsonl, budget.json) with zero joins. Dashboard showed f0-kill as "needs rescue — command failed, **no parsed error**" while 18 fully-parsed structured refusals sat 3 files away. "Gateway truth: unknown" and "0 API tokens" with a live ledger present.
-3. **Rescue layer sends confident nonsense**: rescue prompt says "inspect the project, return the exact files or config values needed to fix it" — there WAS no project bug; their own wallet blocked the call. Blocks do not reach the manager as typed events.
-4. **Their loop detector slept through a loop**: agent retrying identical blocked calls `similarity: 1, repeats: 1` → `looping: false`, repeatedly. Their canary feature missed the canary.
-5. **Estimator guesses blind**: 500-word answer estimated $1.61 (Opus) / $0.16 (Haiku) — ~50–100× overshoot. No session context, no stage awareness.
-6. **Mission machinery everywhere/no-where**: trivial haiku got mission ID + md + html reports + .runcap/ litter in `~`; the one run that MATTERED (the kill) wrote NO report at all; `.runcap/latest` pointed at stale run.
-7. **Cap is opt-in per day-cap**: `no cap set → full passthrough` (warned, not enforced).
-8. **False-positive debt**: successful haiku flagged "at_risk (low confidence)" + "check this" — scary labels on success.
-9. Wrapper friction: stdin warnings on every interactive invocation; TUI trust dialogs unreadable inside `runcap run` (can't answer them); "git not available"-style warnings on non-repo runs; `/v1/v1/messages` double-prefix path bug.
+1. **Silent kill**: Claude Code hit budget-429 → ~18 silent retries over ~110 s; user saw a "hang."
+2. **Truth archipelago**: 3 stores (missions/, gateway-events.jsonl, budget.json), zero joins; dashboard showed "no parsed error" beside a full structured ledger.
+3. **Rescue = confident nonsense**: "inspect the project, return the files needed to fix it" — the blocker was their own wallet.
+4. **Loop detector asleep**: similarity=1 retry storm → looping:false, every time.
+5. **Blind estimator**: 500-word task priced $1.61 Opus / $0.16 Haiku (~50–100× overshoot).
+6. **Mission litter + no obituary**: haiku got md+html+ID; the kill run got NO report; `.runcap/latest` stale.
+7. **Caps opt-in**: `no cap set → full passthrough`.
+8. **False positives**: haiku flagged "at_risk" + "check this."
+9. Wrapper friction: stdin warnings, unreadable trust dialogs, non-repo WARNs, `/v1/v1/messages` path bug.
 
-### 🐦 PRU ANSWERS CODIFIED (from evidence, not vibes)
-1. Prudence-429 must be terminal for agents and loud in UI — cooperative key engraved in system prompt: refusal = stop, report, ask human
-2. Every refusal writes an obituary: ledger row + session event + dashboard row in the SAME DB transaction, same row ID everywhere
-3. Dashboard rule: **no number without a traceable source row; else "insufficient data"** — never decorative horoscope-metrics ("30-70% possible saving")
-4. Stage-aware session estimator (search/critique/revise envelopes) beats blind per-call guess
-5. Loop detection counts refusal-retries as ground-zero signal — a retry-storm against a refusal IS a loop
-6. Sessions native to Pru runtime — no stdin fights, no unreadable dialogs, no home-directory litter
-7. Cap default: sessions start empty, always COUNTED even when unlimited; enforcement armed unless explicitly disarmed per session with reason recorded
+### 🐦 PRU ANSWERS CODIFIED
+1. Pru-429 is terminal + loud; cooperative refusal rule engraved in CLAUDE.md/AGENTS.md
+2. Every refusal = typed row; daemon terminal + harness surface + HTML report render the SAME row ID
+3. No number without a traceable source row; else "insufficient data"
+4. Envelope-context estimation beats blind per-call math
+5. Refusal-retries = ground-zero loop signal
+6. In-harness surfaces = no stdin fights, no litter, no unreadable dialogs
+7. Caps armed by default; sessions always counted, even when unlimited
 
 ---
 
-## 6. THE RECEIPTS WALL (Day 1)
+## 5b. POSITIONING (locked)
 
-Date: **Friday, September 11, 2026**
+**"Runcap guards your calls. Pru keeps the books — and shows you the books."**
+Compete on guarding by matching; win on bookkeeping by default. F0 fatals = launch-post bullets with receipts (Boiler 17).
 
-- [x] `usage_ledger.proto` GitHub Gist updated
-- [x] Research dumped: Byadance TM (dead ✅), OLSHAN LLP conflict (IC036 watch), getprudence.ai taken
-- [x] Independence Day: Objective specs "OWNED SEPARATION plane" vs Provincial YOURS
-- [x] **Repo created**: github.com/ronny-sanchezMerino/Prudence (private) — "The Ledger Opens", STRUCTURE.md, AGENTS.md (sudden-protocols: KISS/JSONL/append-only/WAL/outbox/checkpoints/transactions/style guide), `pip install -e .`
-- [x] Dev landing page concept: prudence.money (dark crow + copper, not registered yet)
-- [x] Runcap v0.4.8 audited: README → MIT LICENSE → npm install → doctor → baseline run → $0.05 kill test → gateway-events.jsonl forensics → dashboard audit (:8791) → rescue-layer audit
-- [x] **Competitive intelligence yielded three engraved Boilers (#24, #25) + Pru Answers Codified list (§5)**
-- [x] Thesis today: "Never say no to a business AND —" — rather: Field Day > build day. Rival documented README-to-divot in one afternoon; architecture every claim resolved against receipts.
+**Competitive (parity):** pre-send stop, structured events, retry-storm-proof caps, fail-closed keys — all matched or exceeded (ours armed-by-default, theirs opt-in).
 
-**Day 1 outcome: ledger open, opponent mapped, rules sharpened. +20% lifetime check rate to nobody's surprise of this project org.** 🪶⚖️
+**Differentiated (they structurally can't):** one row of truth across all surfaces; replay as public proof; honest incapacity ("insufficient data" > horoscopes); the bookkeeper's voice; verifiable savings statements; **residency inside Claude Code/Codex** — we meet the user in their pane.
+
+**Friendlier (week-one felt):** refusal literacy (what/by-how-much/what-next/exact-command); 4-icon taxonomy with zero false positives; doctor-that-heals; armed-by-default never preachy; `pru demo` magic trick on cold install (prudence-cli + pru-cli already on npm @0.0.1).
+
+---
+
+## 6. THE RECEIPTS WALL (Day 1 — 2026-09-11)
+
+- [x] `usage_ledger.proto` Gist updated
+- [x] Legal research: ByteDance dead ✅, OLSHAN LLP IC-036 watch, getprudence.ai taken
+- [x] Repo live: STRUCTURE.md, AGENTS.md sudden-protocols, `pip install -e .` banner
+- [x] prudence-cli + pru-cli on npm @0.0.1 (prior session)
+- [x] prudence.money landing concept (dark crow + copper, unregistered)
+- [x] Runcap v0.4.8 full autopsy: README → LICENSE → install → doctor → baseline → $0.05 kill test → JSONL forensics → dashboard (:8791) → rescue layer
+- [x] Boilers #24–25 engraved from evidence; §5 answers codified; §5b positioning locked
+- [x] Identity pillars locked: crow voice + Night Shift
+- [x] **Anatomy rev.2 locked: daemon + relay + in-harness packs (MCP/slash/hooks); native TUI demoted; `/pru:*`-inside-Claude-Code as primary UX** (founder-directed, Boiler-13-aligned)
+- [x] Field Day > build day: every architecture claim resolved against receipts in one afternoon.
+
+**Day 1 outcome: ledger open, opponent mapped, voice locked, flagship story locked, product anatomy RESHAPED around the user's actual pane. 🪶⚖️**
 
 ---
 
 ## 7. ⏭️ NEXT AGENT ACTION
 
-> **START HERE.** You are resuming Pru. Read §2 Boilers, §4 Architecture, §5 Runcap findings, then execute:
+> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), §5 (F0), §5b (Positioning). Then execute F1:
 
-**F1 (from §4 Syllabus): Study Runcap as a source base.**
-1. `npm view runcap` → confirm MIT-attached package OK to read (green already)
-2. `npm pack runcap` or clone auroradesign/runcap; read gateway + estimator + loop-detector internals
-3. Produce `/docs/runcap-study.md` in the Prudence repo: what to adopt, what to reject, what they got wrong that we must not copy (esp. estimator blind-guessing, non-typed refusal propagation, siloed truth stores)
-4. Give the repo the raw-material analysis for the **passthrough relay** (secondary path in §4) — how their gateway intercepts `ANTHROPIC_BASE_URL`, how it measures pre/post-call delta, what their JSONL schema would look like as our SQLite `usage_ledger` row
-5. Update this file: move F1 to ✅ in syllabus, update §7 to F2
-6. One PR, ≤5 changes, owner named in any to-do rows, run PRU code (`pip install -e .` prints the banner) before committing
+**F1: Runcap source study → relay design.**
+1. `npm pack runcap` (or clone auroradesign/runcap); read gateway, estimator, loop-detector internals. MIT = audit green (confirmed F0).
+2. Write `/docs/runcap-study.md`: adopt / reject / must-not-copy (esp. blind estimator, untyped refusal propagation, siloed truth stores).
+3. Write `/docs/relay-design.md`: (a) how their gateway hijacks ANTHROPIC_BASE_URL and what we'd do differently for a LOUD 429; (b) JSONL→SQLite schema mapping (their fields → usage_ledger/cap_state/refusal_events); (c) the estimate-with-envelope-context function signature; (d) acceptance criteria matching §4 v0.1 (a)–(d).
+4. Stub directory skeleton only (no implementation PR yet beyond ≤5 changes): `src/relay/`, `src/ledger/`, `packs/claude-code/commands/`, `packs/codex/`.
+5. Update this file: F1 ✅, §7 → F2 (Claude Code surface research).
+6. One PR, ≤5 changes, named owners on every to-do row, run `pip install -e .` (banner must print) before commit.
 
-**Constraints from §4 v0.1 still standing: cheapest-first order; the checkpoint that matters is ledger replay determinism — run same session twice, ledgers must match.**
+**Standing constraints: cheapest-first; replay determinism is the checkpoint; Night Shift is the spine's showcase, not extra scope; in-harness packs are thin glue — daemon owns all truth.**
 
 ---
-*"The receipt wall is the moat. The ledgers record. I include everything they sell, and the panic they advertise during stall." — Pru* 🐦
+*"The receipt wall is the moat. The ledgers record. I include everything they sell, and the panic they advertise during the stall." — Pru* 🐦
