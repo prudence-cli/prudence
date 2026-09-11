@@ -8,11 +8,17 @@
   },
   "scripts": {
     "test": "bun test",
+    "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
+    "check": "bun run typecheck && bun test",
     "demo": "bun src/cli.ts demo",
     "start": "bun src/cli.ts start"
   },
   "dependencies": {
     "commander": "^14.0.0",
     "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "5.6"
   }
 }

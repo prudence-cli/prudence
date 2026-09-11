@@ -2,10 +2,11 @@
 // Same mock-upstream discipline: no live keys, ever.
 
 import { describe, expect, test } from "bun:test";
+import type { Hono } from "hono";
 import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createRelay } from "../src/relay/server";
+import { createRelay, type FetchLike } from "../src/relay/server";
 import { getStatus, openLedger, setCap, usdToMicro } from "../src/ledger/db";
 
 const FIX = join(import.meta.dir, "fixtures");
@@ -26,12 +27,12 @@ function upstream(delayMs = 0) {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  }) as FetchLike;
   return fetchImpl;
 }
 
-function post(app: { request: typeof fetch }, body: unknown) {
-  return (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+async function post(app: Hono, body: unknown) {
+  return app.request(
     "http://localhost/v1/messages",
     {
       method: "POST",

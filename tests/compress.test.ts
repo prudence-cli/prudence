@@ -4,10 +4,11 @@
 // matters. Never touches a real LLM API.
 
 import { describe, expect, test } from "bun:test";
+import type { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { compressRequestBody } from "../src/compress/index";
-import { createRelay } from "../src/relay/server";
+import { createRelay, type FetchLike } from "../src/relay/server";
 import { openLedger, setCap, setRule, usdToMicro } from "../src/ledger/db";
 
 const FIX = join(import.meta.dir, "fixtures");
@@ -32,12 +33,12 @@ function echoUpstream() {
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
-  }) as typeof fetch;
+  }) as FetchLike;
   return { fetchImpl, captured: () => captured, calls: () => calls };
 }
 
-function post(app: { request: typeof fetch }, body: unknown) {
-  return (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+async function post(app: Hono, body: unknown) {
+  return app.request(
     "http://localhost/v1/messages",
     {
       method: "POST",
@@ -130,7 +131,10 @@ describe("echo-mock relay proof", () => {
       upstreamApiKey: "sk-test",
       fetchImpl: echo.fetchImpl,
     });
-    const fixture = logHeavyFixture();
+    const fixture = logHeavyFixture() as {
+      system: unknown;
+      messages: { role: string; content: string }[];
+    };
     const originalText = JSON.stringify(fixture);
     const res = await post(app, fixture);
     expect(res.status).toBe(200);
@@ -143,11 +147,14 @@ describe("echo-mock relay proof", () => {
     expect(row.tokens_saved).toBe(Math.round(savedChars / 4));
 
     // Semantics intact: short prose byte-identical, first occurrence verbatim.
-    const sent = JSON.parse(forwarded) as typeof fixture;
+    const sent = JSON.parse(forwarded) as {
+      system: unknown;
+      messages: { role: string; content: string }[];
+    };
     expect(sent.system).toBe(fixture.system);
     expect(sent.messages[0]).toEqual(fixture.messages[0]);
-    const origMsgs = fixture.messages as { role: string; content: string }[];
-    const sentMsgs = sent.messages as { role: string; content: string }[];
+    const origMsgs = fixture.messages;
+    const sentMsgs = sent.messages;
     expect(sentMsgs[1].content.split("\n").slice(0, 12).join("\n")).toBe(
       origMsgs[1].content.split("\n").slice(0, 12).join("\n"),
     );

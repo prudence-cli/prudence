@@ -3,9 +3,10 @@
 // circular-spending guard instead of burning silently.
 
 import { describe, expect, test } from "bun:test";
+import type { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createRelay } from "../src/relay/server";
+import { createRelay, type FetchLike } from "../src/relay/server";
 import {
   getStatus,
   openLedger,
@@ -33,12 +34,12 @@ function stubUpstream() {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  }) as FetchLike;
   return { fetchImpl, calls: () => calls };
 }
 
-function post(app: { request: typeof fetch }, body: unknown) {
-  return (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+async function post(app: Hono, body: unknown) {
+  return app.request(
     "http://localhost/v1/messages",
     {
       method: "POST",

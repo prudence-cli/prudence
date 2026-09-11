@@ -119,7 +119,9 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | F3 Loop guard + rate limit + injection + installer | refusal-retries loop signal, max USD/min, `pru shell`, fresh-checkout proxied with zero manual config | ✅ **DONE 2026-09-11** (17 tests green; storm → loop_blocked — see §7 log) |
 | F3.5 Compression pass | strip-list compression + tallies, echo-mock no-damage proof | ✅ **DONE 2026-09-11** (26 tests green; 38k-token fixture sheds past threshold — see §7 log) |
 | F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ✅ **DONE (code) 2026-09-11** (29 tests green; `pru demo` tells the story — owner gates left: LICENSE, public flip, live capture — see §7 log) |
-| F5 Meter Watch launch | headline leads with savings | ⬜ NEXT, then N-track (Graveyard) |
+| F5 Meter Watch launch | headline leads with savings | ✅ **LAUNCHED 2026-09-11** (repo PUBLIC, MIT, tsc+29 green, CHANGELOG — see §7 log) |
+| N1 Graveyard: snapshot + diff builder | snapshotter, diff payload, 50%-priced estimate, queued jobs | ✅ **DONE 2026-09-11** (36 tests green; live-repo smoke $0.19 vs $0.38 — see §7 log) |
+| N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ⬜ NEXT |
 
 ---
 
@@ -186,22 +188,40 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — OWNER GATES, then F5/N-track
+## 7. ⏭️ NEXT AGENT ACTION — N2 BATCH CLIENT (Meter Watch launched, N1 done)
 
-> **F4 code is done. Owner gates resolved 2026-09-11:**
-> 1. **LICENSE: MIT** — committed. (Copyright names Ronny Sanchez Merino;
->    say the word if the holder should read differently.)
-> 2. **Visibility: stay private** — public flip rides F5 launch.
-> 3. **Live capture: open** — no answer yet; SYNTHETIC fixtures stand,
->    labeled, until a real anonymized capture lands.
-> Landing page waits on the domain decision.
->
-> Next: **F5 (launch)** then the **N-track (Graveyard)**: N1 snapshotter +
-> diff builder with 50%-priced estimates (plan §3.6).
+> Execute **N2: batch client state machine + diff application + safety net**
+> (plan §3.2–§3.5): queued → submitted (2am) → polled (6am) → `git apply
+> --check` → test_command on base AND night branch, compared → report.
+> Mock the Batches API in tests (fixtures, never live). No network in tests.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### F5 + N1 close-out log (2026-09-11, owner: agent session)
+
+- **F5 launched:** repo flipped PUBLIC via `gh` (was PRIVATE; owner
+  pre-authorized flip-at-F5). Readiness: `bun run check` = tsc clean +
+  29 tests green, CHANGELOG.md, TypeScript + `@types/bun` devDeps with a
+  `check` script, `FetchLike` minimal upstream type replacing the
+  `as typeof fetch` casts. Landing still waits on the domain decision.
+- **N1 built:** `004_night_jobs.sql`; `src/graveyard/snapshot.ts` (HEAD
+  sha, `git bundle create`, text-only file select, ~100k-token cap with
+  truncation flag); `src/graveyard/diff_builder.ts` (diff-only system
+  prompt, fenced snapshot payload, `priceTokensMicro` explicit-batch
+  estimates); `queueNightJob`/`listNightJobs`; `pru graveyard "task"`
+  (snapshot → payload → exact 50% math → queued) and bare
+  `pru graveyard` (list). Every night feature carries the batch discount.
+- Verified: `bun run check` 36 pass / 0 fail across 5 files — bundle
+  `git bundle verify` clean, binaries skipped, cap enforced, payload
+  carries task+files+sha, batch == half standard (±1 micro rounding),
+  unpriced model refuses, queued row lists back. Live smoke on this repo:
+  33 files, ~84,811 tokens, **$0.19 batch vs $0.38 standard** queued and
+  listed.
+- Deviations logged: (i) F5 + N1 share one uncommitted tree (shared
+  files; recommend per-phase commits going forward or accept combined).
+  (ii) No Batch API touch in N1 by design — submission/poll/apply are N2.
 
 ### F4 close-out log (2026-09-11, owner: agent session)
 

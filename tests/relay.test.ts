@@ -2,9 +2,10 @@
 // Never touches a real LLM API — the upstream is a stub fetch.
 
 import { describe, expect, test } from "bun:test";
+import type { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createRelay } from "../src/relay/server";
+import { createRelay, type FetchLike } from "../src/relay/server";
 import {
   fmtUsd,
   getStatus,
@@ -34,12 +35,12 @@ function jsonUpstream() {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  }) as FetchLike;
   return { fetchImpl, calls: () => calls };
 }
 
-function post(app: { request: typeof fetch }, body: unknown, signal?: AbortSignal) {
-  return (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+async function post(app: Hono, body: unknown, signal?: AbortSignal) {
+  return app.request(
     "http://localhost/v1/messages",
     {
       method: "POST",
@@ -125,7 +126,7 @@ describe("ledger close ($0.10 cap)", () => {
         status: 200,
         headers: { "content-type": "application/json" },
       });
-    }) as typeof fetch;
+    }) as FetchLike;
     const { app } = createRelay({
       db,
       upstreamBaseUrl: "https://api.anthropic.com",
@@ -194,7 +195,7 @@ describe("streaming SSE (passthrough tap)", () => {
     const db = openLedger(":memory:");
     const sse = sseFixture();
     const fetchImpl = (async () =>
-      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as FetchLike;
     const { app } = createRelay({
       db,
       upstreamBaseUrl: "https://api.anthropic.com",
@@ -240,7 +241,7 @@ describe("mid-stream abort", () => {
         status: 200,
         headers: { "content-type": "text/event-stream" },
       });
-    }) as typeof fetch;
+    }) as FetchLike;
     const { app } = createRelay({
       db,
       upstreamBaseUrl: "https://api.anthropic.com",
@@ -300,7 +301,7 @@ describe("claude-code agent shape (synthetic live-shape fixture)", () => {
     const db = openLedger(":memory:");
     const sse = readFileSync(join(FIX, "claude-code-stream-sse.txt"), "utf8");
     const fetchImpl = (async () =>
-      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as FetchLike;
     const { app } = createRelay({
       db,
       upstreamBaseUrl: "https://api.anthropic.com",

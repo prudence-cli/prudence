@@ -143,3 +143,19 @@ export function actualCostMicro(usage: UsageIn, model: string): number | null {
     output * applyBatch(pricing.outputPerMillion, pricing.batch);
   return Math.round(micro);
 }
+
+// Graveyard estimates (N1): the same token counts priced both ways so the
+// 50% math is exact, not a slogan. Explicit batch flag — no name hacks.
+export function priceTokensMicro(
+  inputTokens: number,
+  outputTokens: number,
+  model: string,
+  batch: boolean,
+): number | null {
+  const pricing = modelPricing(model);
+  if (!pricing) return null;
+  const micro =
+    Math.max(0, Math.floor(inputTokens)) * applyBatch(pricing.inputPerMillion, batch) +
+    Math.max(0, Math.floor(outputTokens)) * applyBatch(pricing.outputPerMillion, batch);
+  return Math.round(micro);
+}

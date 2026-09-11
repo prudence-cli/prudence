@@ -467,3 +467,66 @@ export function minuteSpendMicro(
     .get(sessionId, Date.now() - windowMs) as { m: number };
   return row.m;
 }
+
+export type NightJobRow = {
+  id: string;
+  project_path: string;
+  repo_snapshot: string;
+  base_sha: string;
+  task_prompt: string;
+  model: string;
+  upstream: string;
+  status: string;
+  batch_id: string | null;
+  result_pr_url: string | null;
+  est_cost_micro_usd: number | null;
+  real_cost_micro_usd: number | null;
+  queued_at: number;
+  finished_at: number | null;
+};
+
+export function queueNightJob(
+  db: Database,
+  input: {
+    projectPath: string;
+    repoSnapshot: string;
+    baseSha: string;
+    taskPrompt: string;
+    model: string;
+    upstream?: string;
+    estCostMicro?: number | null;
+  },
+): NightJobRow {
+  const row: NightJobRow = {
+    id: `nj_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+    project_path: input.projectPath,
+    repo_snapshot: input.repoSnapshot,
+    base_sha: input.baseSha,
+    task_prompt: input.taskPrompt,
+    model: input.model,
+    upstream: input.upstream ?? "anthropic-batch",
+    status: "queued",
+    batch_id: null,
+    result_pr_url: null,
+    est_cost_micro_usd: input.estCostMicro ?? null,
+    real_cost_micro_usd: null,
+    queued_at: Date.now(),
+    finished_at: null,
+  };
+  db.prepare(
+    `INSERT INTO night_jobs (id, project_path, repo_snapshot, base_sha, task_prompt, model, upstream, status, batch_id, result_pr_url, est_cost_micro_usd, real_cost_micro_usd, queued_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    row.id, row.project_path, row.repo_snapshot, row.base_sha, row.task_prompt,
+    row.model, row.upstream, row.status, row.batch_id, row.result_pr_url,
+    row.est_cost_micro_usd, row.real_cost_micro_usd, row.queued_at, row.finished_at,
+  );
+  return row;
+}
+
+export function listNightJobs(db: Database, status?: string): NightJobRow[] {
+  if (status) {
+    return db.query("SELECT * FROM night_jobs WHERE status = ? ORDER BY queued_at DESC").all(status) as NightJobRow[];
+  }
+  return db.query("SELECT * FROM night_jobs ORDER BY queued_at DESC").all() as NightJobRow[];
+}

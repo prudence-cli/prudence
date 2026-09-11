@@ -33,8 +33,11 @@ export type RelayOptions = {
   upstreamBaseUrl: string;
   upstreamApiKey?: string;
   anthropicVersion?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: FetchLike;
 };
+
+// Minimal upstream shape: real fetch satisfies it, stubs stay trivial.
+export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 export type RelayContext = {
   app: Hono;

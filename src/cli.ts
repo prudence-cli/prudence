@@ -10,12 +10,17 @@ import {
   clearCap,
   fmtUsd,
   getStatus,
+  listNightJobs,
   openLedger,
+  queueNightJob,
   setCap,
   setRule,
   usdToMicro,
 } from "./ledger/db";
-import { createRelay } from "./relay/server";
+import { createRelay, type FetchLike } from "./relay/server";
+import { snapshotRepo } from "./graveyard/snapshot";
+import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
+import type { Hono } from "hono";
 
 const program = new Command();
 program.name("pru").description("Prudence — the cost-optimization layer for AI agents.").version("0.1.0");
@@ -219,7 +224,7 @@ program
   .action(async () => {
     // Everything below runs in-process against throwaway file DBs and a
     // stub upstream. No keys, no network, no trace left behind.
-    const stubUpstream = (async () =>
+    const stubUpstream: FetchLike = async () =>
       new Response(
         JSON.stringify({
           id: "msg_demo_1",
@@ -228,15 +233,15 @@ program
           usage: { input_tokens: 150, output_tokens: 90 },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
-      )) as typeof fetch;
+      );
     const demoBody = {
       model: "claude-sonnet-4-5",
       max_tokens: 256,
       system: "You are a demo ledger entry.",
       messages: [{ role: "user", content: "Spend a little, then stop me." }],
     };
-    const fire = async (app: { request: typeof fetch }) =>
-      (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+    const fire = async (app: Hono) => {
+      const r = await app.request(
         "http://localhost/v1/messages",
         {
           method: "POST",
@@ -247,7 +252,9 @@ program
           },
           body: JSON.stringify(demoBody),
         },
-      ).then(async (r) => ({ status: r.status, text: await r.text() }));
+      );
+      return { status: r.status, text: await r.text() };
+    };
 
     const runTape = async (dbPath: string) => {
       const db = openLedger(dbPath);
@@ -300,6 +307,63 @@ program
           try { rmSync(`${f}${suffix}`); } catch { /* already gone */ }
         }
       }
+    }
+  });
+
+const graveyard = program
+  .command("graveyard")
+  .description("Half-price overnight work (no task lists the queue).")
+  .argument("[task...]", "non-urgent task to queue for the night window")
+  .option("--model <model>", "model for the night run", "claude-sonnet-4-5")
+  .option("--path <path>", "repo to snapshot (default: cwd)")
+  .action((task: string[], opts: { model: string; path?: string }) => {
+    const db = openLedger();
+    try {
+      const text = task.join(" ").trim();
+      if (!text) {
+        const jobs = listNightJobs(db);
+        if (jobs.length === 0) {
+          console.log("Pru has no night jobs on the books. Queue one: pru graveyard \"add tests to src/payments\"");
+          return;
+        }
+        for (const j of jobs) {
+          console.log(
+            `${j.id} [${j.status}] ${j.model} est ${j.est_cost_micro_usd !== null ? fmtUsd(j.est_cost_micro_usd) : "unknown"} — ${j.task_prompt.slice(0, 80)}`,
+          );
+        }
+        return;
+      }
+      const projectPath = opts.path ?? process.cwd();
+      const snap = snapshotRepo(projectPath);
+      const payload = buildDiffPayload(snap, text, opts.model);
+      const est = estimateNightJob(payload);
+      if (!est) {
+        console.error(`Pru cannot price model "${opts.model}" — refusing to queue a guess.`);
+        process.exitCode = 1;
+        return;
+      }
+      const job = queueNightJob(db, {
+        projectPath: snap.project_path,
+        repoSnapshot: snap.bundle_path,
+        baseSha: snap.base_sha,
+        taskPrompt: text,
+        model: opts.model,
+        estCostMicro: est.batch_micro_usd,
+      });
+      console.log(`Pru queued night job ${job.id} for ${snap.project_path} @ ${snap.base_sha.slice(0, 8)}.`);
+      console.log(
+        `Context: ${snap.files.length} files, ~${payload.input_tokens_est.toLocaleString()} tokens` +
+          (snap.truncated ? " (truncated at cap)" : "") + ".",
+      );
+      console.log(
+        `Estimate: ${fmtUsd(est.batch_micro_usd)} at batch price vs ${fmtUsd(est.standard_micro_usd)} standard — ` +
+          `about ${fmtUsd(est.saved_micro_usd)} stays in your pocket. Runs in the night window; watch with: pru graveyard list.`,
+      );
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exitCode = 1;
+    } finally {
+      db.close();
     }
   });
 
