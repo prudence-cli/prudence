@@ -4,6 +4,14 @@
 > your AI agents spend. Binary: `pru`. Voice: precise, calm, slightly stern,
 > never cute during errors.
 >
+> **Positioning (locked 2026-09-11 after competitive sweep):**
+> Pru is not "a budget firewall" and not "a task scheduler" — those both have
+> incumbents (see §0). Pru is the **cost-optimization layer for AI agents**:
+> hard enforcement when you're awake, half-price batch execution when you
+> sleep, and a ledger that proves the savings. Marketing line:
+> *"Pru cuts your agent bill — enforcement when awake, Graveyard Shift at half
+> price when asleep."*
+>
 > **Verified assets (claimed 2026-09-11):**
 > - npm: `prudence-cli@0.0.1` (placeholder published), alias `pru-cli@0.0.1`
 > - GitHub: org `prudence-cli`, repo `prudence-cli/prudence` (**private until F4 launch**)
@@ -30,6 +38,43 @@
 | Savings meter | "Tallies" / "what Pru saved you" |
 | Loop-guard alert | "Circular spending" notice |
 | Rules config | The ledger rules |
+
+---
+
+## §0. Competitive landscape (researched 2026-09-11)
+
+**Do not build blind. These are the incumbents; features below them are
+parity obligations or differentiation mandates, not inventions.**
+
+### Enforcement / budget control
+
+| Competitor | What it does | What it doesn't | Pru's stance |
+|---|---|---|---|
+| **Runcap** (indie CLI) | Local proxy + `$ runcap --cap 2.00` + HTTP 429 kill on exceed; pre-flight session caps; claims loop protection;"stop runaway LLM agent mid-run" is its exact pitch | Maturity unknown; loop guard is claim-level, no visible ledger/savings/UX character; multi-upstream unclear | **Parity required** on cap-in-request-path. Differentiate on: loop-guard as first-class UX w/ human-readable alerts, multi-tool + multi-upstream (OpenRouter), tallies, team tier. Owner must test-drive Runcap before F2 |
+| **LiteLLM / Portkey / Bifrost** (proxies) | Budgets per virtual key, usage-based rate limits, model fallbacks, caching | No session-level caps active *during* an agent run; billing-period only; heavy infra orientation (Redis, Helm, enterprise deploys) | Pru = agent-session granularity, 60-second local install, no infra. Do not compete on enterprise features |
+| **Kong AI Gateway** | Token-level rate limiting (exact tokens, prompt-level, concurrent), per-provider cost dashboards | Enterprise platform, not a dev desktop tool | Ignore — different buyer |
+| **ccusage / Usage Monitor** (4.8k–16.5k★) | Read-only monitoring: token sums, burn rate, projections from local JSONL | Zero enforcement, zero prevention | Pru's tagline contrast: "ccusage tells you what you spent. Pru stops the spending." |
+| **`--max-budget-usd`** (Anthropic native) | Native single-command cap in `claude -p` SDK mode | Only single commands; no interactive sessions, no loops, no other agents | Pru covers interactive sessions + Codex/Cline/everything else |
+| **Tetrate token brokering** | Enforced budgets in request path with cheaper-model fallback | Enterprise/router-class | Borrow the idea (budget-exceed → model fallback) as a later rule kind |
+
+### Deferred / overnight execution
+
+| Competitor | What it does | What it doesn't | Pru's stance |
+|---|---|---|---|
+| **Anthropic Routines / `/schedule` / Cowork** | Cloud-scheduled agent tasks; repo clone; runs while laptop asleep; recurring/on-demand/GitHub triggers | Runs at full price; Anthropic-cloud only; no batch pricing, no savings meter; lock-in | **Pru's wedge: economics.** Same convenience, 50% cheaper, vendor-neutral. "Their night shift bills you retail; Pru's bills you wholesale." |
+| **Dreamer plugin** (claudeonrails.dev) | Cron/NL-scheduled Claude Code jobs; git worktrees; branch/commit/push; token-usage report inline | Full-price execution; Rails-flavored; no batch routing; no guardrails | Closest indie sibling. Pru beat it on savings math + any repo/agent |
+| **Codex scheduled tasks** | OpenAI-side scheduled tasks (reliability/maintenance focus) | Vendor-specific, full price | Same wedge |
+
+### The open lane this sweep exposed
+
+Nobody combines: (a) request-path session enforcement, (b) deferred work
+routed to 50%-off batch pricing, (c) a per-user savings ledger that turns
+cost control into a visible habit. Individually each exists somewhere;
+as a coherent product with a character, **none exists**. That bundle is Pru.
+
+**Standing rule for all contributors and agents:** before adding any feature,
+check this §0. If a competitor shipped it since 2026-09-11, re-decide
+parity vs. skip explicitly in PROGRESS.md.
 
 ---
 
@@ -226,6 +271,11 @@ sequenceDiagram
 
 ## 2. Product 1: The Meter Watch (budget firewall)
 
+> Positioning note (§0): this is Runcap-adjacent. Mandatory differentiators:
+> loop guard with human-readable alerts, multi-upstream incl. OpenRouter,
+> and every blocked dollar recorded in `tallies`. Parity on hard caps alone is
+> not a shippable advantage.
+
 ### 2.1 MVP feature set
 
 1. Per-session budget: `pru budget set 5` (USD)
@@ -295,11 +345,12 @@ state intact.
 
 | Phase | Scope | Est. sessions | Acceptance criteria |
 |---|---|---|---|
+| F0 (new) | **Competitive due diligence**: owner installs Runcap; documents gaps in PROGRESS.md | 1 human | Runcap's cap/loop/OpenRouter behavior documented; Pru's differentiation list confirmed or revised |
 | F1 | Passthrough proxy + SSE parse + SQLite logging | 1–2 | Replay fixture: every request lands in `requests` with real token counts |
 | F2 | Reservations + reconciliation + ledger close + pricing + `pru budget/status` | 1–2 | Mock upstream, budget $0.10 → halts with 429; `spent ≤ budget + 1 reservation`; tests green |
 | F3 | Loop guard, rate limit, agent auto-injection, `pru shell`, install script | 2 | Fresh checkout: installer → `claude` proxied with zero manual config |
 | F4 | Hardening: aborts, fixtures per agent, README, landing, **repo goes public, license chosen** | 1–2 | Ctrl+C mid-stream → consistent DB, no zombie reservations |
-| **F5** | **Public launch** | — | — |
+| **F5** | **Public launch** — headline leads with savings ("ccusage tells you what you spent; Pru stops it") | — | — |
 
 ### 2.7 Monetization
 
@@ -312,6 +363,11 @@ state intact.
 ---
 
 ## 3. Product 2: Graveyard Shift (night batch)
+
+> Positioning note (§0): scheduling is commoditized (Anthropic Routines,
+> Dreamer). **Never** market this as scheduling. Market the economics:
+> "work that can wait costs half." The Batches API 50% discount is the
+> entire reason this product exists; keep it front and center.
 
 ### 3.1 Concept
 
@@ -375,7 +431,7 @@ graveyard:
 | N1 | Snapshotter + diff builder + `pru graveyard` w/ estimate & confirm | 2 | Real repo → valid batch payload; dry-run mode works |
 | N2 | Batch client state machine + diff application + safety net | 2 | Mock batch fixture → branch created, tests compared, report written |
 | N3 | Morning report + tally math + auto-PR + dogfood | 1 | E2E on own repo: one overnight task lands as PR unassisted |
-| N4 | Launch as Pro feature | — | — |
+| N4 | Launch as Pro feature — headline: median $ saved per night | — | — |
 
 ---
 
@@ -411,7 +467,8 @@ every tally celebrated in Pru's voice ("Pru set aside $4.90 last night.").
 | Proxy distrust | High | Public at F4 launch + local-first + opt-in telemetry only |
 | Batch latency > window | Medium | 24h SLA: report handles "still processing" |
 | Keys in config | Medium | chmod 600; OS keychain follow-up |
-| Naming leftovers | Low | npm: use `prudence-cli` / `pru-cli` (owned); `@pru` scope unavailable (dormant squatter) — never reference it in docs |
+| **Competitive: Runcap/Dreamer ship our differentiators first** | Medium | §0 standing rule: re-check landscape each phase; tallies + batch economics are the moat — ship them early, don't defer |
+| Naming leftovers | Low | npm: use `prudence-cli` / `pru-cli` (owned); `@pru` scope unavailable — never reference it |
 
 ---
 
@@ -419,7 +476,8 @@ every tally celebrated in Pru's voice ("Pru set aside $4.90 last night.").
 
 ```mermaid
 flowchart TB
-    F1[F1: Proxy + SSE + ledger DB<br/>1–2 sessions] --> F2[F2: Reservations + ledger close<br/>1–2 sessions]
+    F0[F0: Human test-drives Runcap<br/>1 session] --> F1[F1: Proxy + SSE + ledger DB<br/>1–2 sessions]
+    F1 --> F2[F2: Reservations + ledger close<br/>1–2 sessions]
     F2 --> F3[F3: Loop guard + injection<br/>+ installer · 2 sessions]
     F3 --> F4[F4: Hardening + go public · 1–2 sessions]
     F4 --> F5[💰 METER WATCH LAUNCH]
@@ -457,6 +515,7 @@ week (pain validated) · D7 retention >30%
 - **npm**: `prudence-cli` (primary), `pru-cli` (alias) — both published as v0.0.1 placeholders on 2026-09-11
 - **Repo**: `github.com/prudence-cli/prudence` (private until F4)
 - **Install**: `curl -fsSL prudence.sh/install.sh | sh`
+- **Positioning line**: *"Pru cuts your agent bill — enforcement when awake, half price when asleep."*
 - **Voice**: first-person bookkeeper. Calm, precise, dry. Sample strings:
   - Budget hit: *"Pru closed the ledger for this session ($5.00 spent)."*
   - Loop guard: *"Pru noticed circular spending: same call 3× ($0.43)."*

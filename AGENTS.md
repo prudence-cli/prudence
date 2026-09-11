@@ -1,24 +1,30 @@
 # AGENTS.md — Prudence ("pru")
 
-Read `implementation-plans-prudence.md` first — it is the source of truth.
-This file defines conventions so every session starts cold without
-re-deriving decisions.
+Read `implementation-plans-prudence.md` first — it is the source of truth,
+**including §0 (competitive landscape)**. This file defines conventions so
+every session starts cold without re-deriving decisions.
 
 ## Mission
 
 Build **Prudence**: a local LLM gateway daemon (`localhost:8787`, binary
 `pru`) that intercepts agent traffic (Claude Code via `ANTHROPIC_BASE_URL`,
-Codex/OpenAI-compat via `OPENAI_BASE_URL`) and enforces spending rules.
-Product 1 = **The Meter Watch** (budget firewall). Product 2 = **Graveyard
-Shift** (deferred tasks via Anthropic Message Batches API, 50% off). The
-Meter Watch ships first.
+Codex/OpenAI-compat via `OPENAI_BASE_URL`). Pru is the **cost-optimization
+layer for AI agents** — not merely a firewall, not a scheduler. The moat is
+the bundle: request-path enforcement (Meter Watch) + 50%-off batch execution
+(Graveyard Shift) + a savings ledger (Tallies).
+
+Product order: Meter Watch first; Graveyard Shift second.
+
+**Positioning rule:** any user-facing or marketing text must frame value as
+*savings*, not surveillance. Scheduling features must always carry the batch
+discount — never build "just run it at night"; it's "run it at half price."
 
 ## Identity and verified assets (fixed facts — do not change)
 
 - Product: **Prudence** · CLI binary: `pru`
 - npm: `prudence-cli` (primary, published 0.0.1 placeholder) · `pru-cli`
-  (alias placeholder) · **never reference the `@pru` scope — it is taken by
-  a dormant third party**
+  (alias placeholder) · **never reference the `@pru` scope — taken by a
+  dormant third party**
 - Repo: `github.com/prudence-cli/prudence` — **private until F4 hardening**;
   flip to public + add LICENSE (MIT vs BSL, owner's call) as part of launch
 - Install UX target: `curl -fsSL prudence.sh/install.sh | sh`
@@ -34,6 +40,18 @@ Meter Watch ships first.
   cutesy tone, the word "oops".
 - Naming map: firewall → Meter Watch · night batch → Graveyard Shift ·
   savings → Tallies · history → the Ledger.
+
+## Competitive guardrails (from plan §0)
+
+- Runcap exists: local proxy + hard cap + 429. Parity on caps is mandatory;
+  differentiation = loop-guard UX, multi-upstream, tallies.
+- ccusage/usage-monitors are read-only — never ship a monitoring-only feature
+  and call it value.
+- Anthropic Routines / Dreamer own night *scheduling* — our night feature
+  exists ONLY as batch-priced execution. If a night feature can't show the
+  50% savings, redesign it.
+- Standing rule: before implementing any new feature, verify it doesn't
+  collapse into an incumbent (plan §0). Log the conclusion in PROGRESS.md.
 
 ## Hard conventions (do not deviate without asking)
 
@@ -84,7 +102,7 @@ install.sh
 ## Current task
 
 See `PROGRESS.md` → "NEXT". Resume from there; do not restart completed
-phases.
+phases. (NOTE: phase F0 — human test-drive of Runcap — precedes F1.)
 
 ## Progress log
 
