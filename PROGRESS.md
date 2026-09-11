@@ -122,7 +122,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | F5 Meter Watch launch | headline leads with savings | ✅ **LAUNCHED 2026-09-11** (repo PUBLIC, MIT, tsc+29 green, CHANGELOG — see §7 log) |
 | N1 Graveyard: snapshot + diff builder | snapshotter, diff payload, 50%-priced estimate, queued jobs | ✅ **DONE 2026-09-11** (36 tests green; live-repo smoke $0.19 vs $0.38 — see §7 log) |
 | N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ✅ **DONE 2026-09-11** (42 tests green; improvement commits, regression stops — see §7 log) |
-| N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ⬜ NEXT |
+| N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ✅ **DONE (code) 2026-09-11** (48 tests green; push verified, PR + live dogfood owner-gated — see §7 log) |
+| N4 Graveyard launch | Pro feature headline: median $ saved/night | ⬜ NEXT (needs live dogfood first) |
 
 ---
 
@@ -189,19 +190,57 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — N3 MORNING REPORT (Meter Watch launched, N2 done)
+## 7. ⏭️ NEXT AGENT ACTION — N4 + LIVE DOGFOOD (N3 code done, hotfix shipped)
 
-> Execute **N3: morning report + tally math + auto-PR + dogfood**
-> (plan §3.6): one overnight run lands as a PR unassisted. Pieces:
-> `pru graveyard digest` (receipt queue: spend to the cent, stops + why,
-> replay-verified badge — inside the harness the user already stares at),
-> Tallies `night_discount` rows from est-vs-standard math, optional
-> push/PR, then a real dogfood night. Scheduler wiring (launchd 2am/6am)
-> belongs here, not earlier.
+> **N3 code is done.** What remains is live proof, and it needs the owner:
+> queue a real non-urgent task, let the 2am tick submit it against the
+> Batch API (owner keys), and wake to the digest + PR. One unassisted
+> overnight landing is the N4 gate; the headline writes itself after that
+> (median $ saved/night).
+>
+> Until then: no new tracks. Polish only on dogfood evidence.
+
+### Hotfix log (2026-09-11, live fire from the MacBook Air)
+
+- Symptom: intermittent upstream 400s (`error_400` + `degraded_parse`
+  rows, Haiku model) surfacing as `api error 400 context_management`
+  while plain calls posted fine.
+- Cause: the relay rebuilt upstream headers from scratch and dropped
+  `anthropic-beta`. Calls carrying context-management params arrived
+  naked and died upstream.
+- Fix: feature headers pass through (`anthropic-beta`, client
+  `anthropic-version`, OpenAI equivalents); auth never does — Pru still
+  injects its own key. Covered by two tests (passthrough + auth
+  replacement, both providers). `docs/coverage.md` updated.
+- Lesson: transparent-by-default includes headers, not just bodies.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### N3 close-out log (2026-09-11, owner: agent session)
+
+- Built: `005_tallies.sql` (tallies table + `est_standard_micro_usd`);
+  `night_discount` recorded at commit time; `src/graveyard/publish.ts`
+  (push verified branch to origin, `gh pr create` with `--pr`, clean
+  refusals for unverified/missing-remote); `src/graveyard/schedule.ts`
+  (2am/6am launchd plists, macOS-only with cron fallback message);
+  `src/graveyard/digest.ts` (receipt queue: spend to the cent, stops +
+  why from reports, verified marks, tally totals); CLI `graveyard --run`
+  (flag — see deviation), `--digest`, `--publish/--pr`,
+  `--schedule/--unschedule`, top-level `pru tallies`;
+  `packs/.../pru-nightshift.md`.
+- Verified: `bun run check` 48 pass / 0 fail — discount booked exactly
+  (standard − batch), failed nights book nothing, push lands on a bare
+  remote while unverified refuses, plists carry both ticks, digest shows
+  spend/stops/verified. Live CLI smoke: queue → tallies → digest →
+  keyless `--run` fails clean.
+- Deviations logged: (i) `graveyard run` subcommand became a `--run`
+  flag (with `--digest/--publish/--schedule`) — task text starting with
+  "run"/"publish" would otherwise misroute; pre-launch break per
+  Boiler 3, README updated. (ii) Live dogfood (real Batch API night +
+  unassisted PR) is an owner gate — N4 waits on it. (iii) `gh pr create`
+  untested live (no remote in tests by design); push path is covered.
 
 ### N2 close-out log (2026-09-11, owner: agent session)
 

@@ -13,8 +13,17 @@ marked otherwise is verified by fixture replay in `tests/`.
 | `POST /v1/chat/completions` (OpenAI-compat, JSON + SSE) | `OPENAI_BASE_URL=http://localhost:8787/v1` | shape-parsed by the same extractors; no dedicated OpenAI fixture yet (gap, see below) |
 | Doubled `/v1` prefix | stripped when upstream base ends in `/v1` | `upstreamUrlFor` unit path (covered indirectly) |
 
-## Usage accounting
+## Header forwarding (live-fire hotfix, 2026-09-11)
 
+Feature headers pass through verbatim: `anthropic-beta`,
+`anthropic-version` (client wins), `user-agent`, `accept` — and the
+OpenAI equivalents (`openai-beta`, `openai-organization`,
+`openai-project`). Stripping them broke real traffic: Haiku calls
+carrying context-management params died upstream with 400s while plain
+calls passed. Auth never passes through — Pru injects its own key
+(BYOK boundary).
+
+## Usage accounting
 - Anthropic: `input_tokens` / `output_tokens` / `cache_read_input_tokens`
   (cached billed at the reduced rate; `input_tokens` includes cached, so
   fresh = total − cached, floored at zero).

@@ -296,8 +296,7 @@ describe("unpriced model under a cap", () => {
   });
 });
 
-describe("claude-code agent shape (synthetic live-shape fixture)", () => {
-  test("tool_use turns with cached usage post exact actuals", async () => {
+describe("claude-code agent shape (synthetic live-shape fixture)", () => {  test("tool_use turns with cached usage post exact actuals", async () => {
     const db = openLedger(":memory:");
     const sse = readFileSync(join(FIX, "claude-code-stream-sse.txt"), "utf8");
     const fetchImpl = (async () =>
@@ -327,6 +326,74 @@ describe("claude-code agent shape (synthetic live-shape fixture)", () => {
     // 1200 fresh in at $3/1M is 0 here (all cached): 8000 cached at $0.30/1M
     // + 300 out at $15/1M = 2400 + 4500.
     expect(row.cost_micro_usd).toBe(6900);
+    db.close();
+  });
+});
+
+describe("upstream headers (live-fire hotfix)", () => {
+  test("feature headers pass through; auth never does", async () => {
+    const db = openLedger(":memory:");
+    let seen: Record<string, string> = {};
+    const fetchImpl: FetchLike = async (_url, init) => {
+      seen = Object.fromEntries(new Headers(init?.headers).entries());
+      return new Response(JSON_UPSTREAM_BODY, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.anthropic.com",
+      upstreamApiKey: "sk-pru",
+      fetchImpl,
+    });
+    const res = await app.request("http://localhost/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "anthropic-beta": "context-management-2025-06-27",
+        "anthropic-version": "2020-01-01",
+        authorization: "Bearer sk-client-sneaky",
+        "x-api-key": "sk-client-sneaky",
+      },
+      body: JSON.stringify(requestFixture()),
+    });
+    expect(res.status).toBe(200);
+    await res.text();
+    // Beta + client version survive (context management lives on these).
+    expect(seen["anthropic-beta"]).toBe("context-management-2025-06-27");
+    expect(seen["anthropic-version"]).toBe("2020-01-01");
+    // Pru's key wins; client credentials never leave the daemon.
+    expect(seen["x-api-key"]).toBe("sk-pru");
+    expect(seen["authorization"]).toBeUndefined();
+    db.close();
+  });
+
+  test("openai path injects bearer and forwards org headers", async () => {
+    const db = openLedger(":memory:");
+    let seen: Record<string, string> = {};
+    const fetchImpl: FetchLike = async (_url, init) => {
+      seen = Object.fromEntries(new Headers(init?.headers).entries());
+      return new Response(JSON_UPSTREAM_BODY, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.openai.com/v1",
+      upstreamApiKey: "sk-pru",
+      fetchImpl,
+    });
+    const res = await app.request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "openai-beta": "assistants=v2" },
+      body: JSON.stringify({ model: "gpt-5-mini", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(seen["authorization"]).toBe("Bearer sk-pru");
+    expect(seen["openai-beta"]).toBe("assistants=v2");
     db.close();
   });
 });

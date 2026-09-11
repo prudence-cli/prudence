@@ -375,12 +375,23 @@ export function createRelay(opts: RelayOptions): RelayContext {
     }
 
     const anthropic = isAnthropicPath(path);
+    // Feature headers pass through: beta flags and API versions change what
+    // the upstream accepts (context management dies without its beta), so
+    // stripping them breaks real traffic. Auth never passes through — Pru
+    // injects its own key below (BYOK boundary).
+    const passthroughNames = anthropic
+      ? ["anthropic-beta", "anthropic-version", "user-agent", "accept"]
+      : ["openai-beta", "openai-organization", "openai-project", "user-agent", "accept"];
     const headers: Record<string, string> = {
       "content-type": "application/json",
     };
+    for (const name of passthroughNames) {
+      const value = c.req.header(name);
+      if (value !== undefined && value !== "") headers[name] = value;
+    }
     if (anthropic) {
       headers["x-api-key"] = apiKey;
-      headers["anthropic-version"] = anthropicVersion;
+      headers["anthropic-version"] ??= anthropicVersion;
     } else {
       headers["authorization"] = `Bearer ${apiKey}`;
     }
