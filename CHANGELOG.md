@@ -17,7 +17,15 @@ ledger behind it all.
   `shell`, `start`, `demo`. In-harness: `/pru:status` pack + Codex snippet.
 - 29 fixture-replay tests, mock upstreams only. `bun run check` green.
 
-## Next — Graveyard Shift (N-track)
+## v0.2.0 — Graveyard Shift (2026-09-11)
 
-Non-urgent work at half price through batch execution. N1: snapshotter +
-diff builder with 50%-priced estimates.
+Non-urgent work at half price. Queue by day, submit at 2am, settle by
+morning — verified branches only.
+
+- Snapshotter: frozen `git bundle`, text-only file select, context cap.
+- Diff-only batch payloads with exact 50%-off estimates up front.
+- Safety net: `git apply --check`, test command on base AND night branch
+  compared, commit on improvement or no regression, artifacts otherwise.
+- Morning digest (receipt queue), `night_discount` tallies, `pru tallies`,
+  verified-branch publish with optional PR, launchd 2am/6am ticks.
+- 48 fixture-replay tests, mock batches only. `bun run check` green.

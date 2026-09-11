@@ -483,6 +483,7 @@ export type NightJobRow = {
   real_cost_micro_usd: number | null;
   queued_at: number;
   finished_at: number | null;
+  est_standard_micro_usd?: number | null;
 };
 
 export function queueNightJob(
@@ -495,6 +496,7 @@ export function queueNightJob(
     model: string;
     upstream?: string;
     estCostMicro?: number | null;
+    estStandardMicro?: number | null;
   },
 ): NightJobRow {
   const row: NightJobRow = {
@@ -512,14 +514,16 @@ export function queueNightJob(
     real_cost_micro_usd: null,
     queued_at: Date.now(),
     finished_at: null,
+    est_standard_micro_usd: input.estStandardMicro ?? null,
   };
   db.prepare(
-    `INSERT INTO night_jobs (id, project_path, repo_snapshot, base_sha, task_prompt, model, upstream, status, batch_id, result_pr_url, est_cost_micro_usd, real_cost_micro_usd, queued_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO night_jobs (id, project_path, repo_snapshot, base_sha, task_prompt, model, upstream, status, batch_id, result_pr_url, est_cost_micro_usd, real_cost_micro_usd, queued_at, finished_at, est_standard_micro_usd)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     row.id, row.project_path, row.repo_snapshot, row.base_sha, row.task_prompt,
     row.model, row.upstream, row.status, row.batch_id, row.result_pr_url,
     row.est_cost_micro_usd, row.real_cost_micro_usd, row.queued_at, row.finished_at,
+    row.est_standard_micro_usd ?? null,
   );
   return row;
 }
@@ -529,6 +533,10 @@ export function listNightJobs(db: Database, status?: string): NightJobRow[] {
     return db.query("SELECT * FROM night_jobs WHERE status = ? ORDER BY queued_at DESC").all(status) as NightJobRow[];
   }
   return db.query("SELECT * FROM night_jobs ORDER BY queued_at DESC").all() as NightJobRow[];
+}
+
+export function getNightJob(db: Database, id: string): NightJobRow | null {
+  return db.query("SELECT * FROM night_jobs WHERE id = ?").get(id) as NightJobRow | null;
 }
 
 export function updateNightJob(
@@ -562,4 +570,42 @@ export function updateNightJob(
   if (sets.length === 0) return;
   vals.push(id);
   db.prepare(`UPDATE night_jobs SET ${sets.join(", ")} WHERE id = ?`).run(...(vals as []));
+}
+
+export type TallyRow = {
+  id: number;
+  kind: string;
+  amount_micro_usd: number;
+  detail: string | null;
+  created_at: number;
+};
+
+export function recordTally(
+  db: Database,
+  kind: string,
+  amountMicro: number,
+  detail?: string,
+): TallyRow {
+  const res = db
+    .prepare("INSERT INTO tallies (kind, amount_micro_usd, detail, created_at) VALUES (?, ?, ?, ?)")
+    .run(kind, Math.max(0, Math.round(amountMicro)), detail ?? null, Date.now());
+  return {
+    id: Number(res.lastInsertRowid),
+    kind,
+    amount_micro_usd: Math.max(0, Math.round(amountMicro)),
+    detail: detail ?? null,
+    created_at: Date.now(),
+  };
+}
+
+export function tallyTotals(db: Database): { kind: string; total_micro_usd: number; n: number }[] {
+  return db
+    .query(
+      "SELECT kind, COALESCE(SUM(amount_micro_usd), 0) AS total_micro_usd, COUNT(*) AS n FROM tallies GROUP BY kind ORDER BY total_micro_usd DESC",
+    )
+    .all() as { kind: string; total_micro_usd: number; n: number }[];
+}
+
+export function recentTallies(db: Database, limit = 10): TallyRow[] {
+  return db.query("SELECT * FROM tallies ORDER BY created_at DESC LIMIT ?").all(limit) as TallyRow[];
 }

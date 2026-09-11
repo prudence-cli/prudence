@@ -11,6 +11,7 @@ import type { Database } from "bun:sqlite";
 import {
   fmtUsd,
   listNightJobs,
+  recordTally,
   updateNightJob,
   type NightJobRow,
 } from "../ledger/db";
@@ -162,6 +163,20 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
   sh(work, "git", "add", "-A");
   sh(work, "git", "-c", "user.email=pru@local", "-c", "user.name=Pru", "commit", "-qm", `night/${job.id}: ${job.task_prompt}`);
   const commit = sh(work, "git", "rev-parse", "HEAD");
+  // The discount is realized at commit time: wholesale, not retail.
+  if (
+    job.est_standard_micro_usd !== null &&
+    job.est_standard_micro_usd !== undefined &&
+    job.est_cost_micro_usd !== null &&
+    job.est_cost_micro_usd !== undefined
+  ) {
+    recordTally(
+      db,
+      "night_discount",
+      job.est_standard_micro_usd - job.est_cost_micro_usd,
+      `${job.id}: batched wholesale instead of retail`,
+    );
+  }
   const estLine =
     job.est_cost_micro_usd !== null && job.est_cost_micro_usd !== undefined
       ? `Est batched cost: ${fmtUsd(job.est_cost_micro_usd)}. Real cost posts at 50% on the invoice.`

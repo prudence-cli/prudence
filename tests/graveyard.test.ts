@@ -3,14 +3,17 @@
 
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { snapshotRepo, SNAPSHOT_MAX_CHARS } from "../src/graveyard/snapshot";
 import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../src/graveyard/diff_builder";
 import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
 import { runDueJobs } from "../src/graveyard/runner";
-import { listNightJobs, openLedger, queueNightJob } from "../src/ledger/db";
+import { publishNightJob } from "../src/graveyard/publish";
+import { agentLabel, graveyardPlist, scheduleGraveyard, unscheduleGraveyard } from "../src/graveyard/schedule";
+import { buildDigest } from "../src/graveyard/digest";
+import { listNightJobs, openLedger, queueNightJob, tallyTotals } from "../src/ledger/db";
 
 function git(cwd: string, ...args: string[]) {
   execFileSync("git", args, { cwd, stdio: "ignore" });
@@ -195,6 +198,7 @@ async function workOneJob(
     taskPrompt: task,
     model: "claude-sonnet-4-5",
     estCostMicro: est.batch_micro_usd,
+    estStandardMicro: est.standard_micro_usd,
   });
   const reports = await runDueJobs(db, {
     workRoot,
@@ -325,5 +329,198 @@ describe("result JSONL extraction", () => {
     expect(extractDiffForJob(good, "nj_missing")).toBeNull();
     const failed = JSON.stringify({ custom_id: "nj_1", result: { type: "errored" } });
     expect(extractDiffForJob(failed, "nj_1")).toBeNull();
+  });
+});
+
+describe("tallies (savings ledger)", () => {
+  test("a finished night books its wholesale discount", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      const job = queueNightJob(db, {
+        projectPath: snap.project_path,
+        repoSnapshot: snap.bundle_path,
+        baseSha: snap.base_sha,
+        taskPrompt: "Bump a.",
+        model: "claude-sonnet-4-5",
+        estCostMicro: est.batch_micro_usd,
+        estStandardMicro: est.standard_micro_usd,
+      });
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      const tallies = db.query("SELECT * FROM tallies").all() as Record<string, unknown>[];
+      expect(tallies).toHaveLength(1);
+      expect(tallies[0].kind).toBe("night_discount");
+      expect(tallies[0].amount_micro_usd).toBe(est.standard_micro_usd - est.batch_micro_usd);
+      expect(String(tallies[0].detail)).toContain(job.id);
+      const totals = tallyTotals(db);
+      expect(totals[0].total_micro_usd).toBe(est.standard_micro_usd - est.batch_micro_usd);
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("a failed night books no discount", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      queueNightJob(db, {
+        projectPath: snap.project_path,
+        repoSnapshot: snap.bundle_path,
+        baseSha: snap.base_sha,
+        taskPrompt: "Bump a.",
+        model: "claude-sonnet-4-5",
+        estCostMicro: est.batch_micro_usd,
+        estStandardMicro: est.standard_micro_usd,
+      });
+      await runDueJobs(db, {
+        workRoot,
+        testCommand: 'grep -q "a = 1" src/a.ts',
+        client: new MockBatchClient(FIX_DIFF),
+      });
+      expect(listNightJobs(db)[0].status).toBe("failed");
+      expect(db.query("SELECT * FROM tallies").all()).toHaveLength(0);
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+});
+
+describe("publish (local push)", () => {
+  test("verified branch pushes to origin; unverified refuses", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const bare = mkdtempSync(join(tmpdir(), "pru-n3-bare-"));
+    const workRoot = mkWorkRoot();
+    try {
+      execFileSync("git", ["init", "--bare", "-q", bare]);
+      execFileSync("git", ["-C", dir, "remote", "add", "origin", bare]);
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      const queue = (task: string) =>
+        queueNightJob(db, {
+          projectPath: snap.project_path,
+          repoSnapshot: snap.bundle_path,
+          baseSha: snap.base_sha,
+          taskPrompt: task,
+          model: "claude-sonnet-4-5",
+          estCostMicro: est.batch_micro_usd,
+          estStandardMicro: est.standard_micro_usd,
+        });
+      const good = queue("Bump a.");
+      const early = queue("Too soon.");
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      // Second job also ran (same mock fixes the same file) — force it back
+      // to queued to prove the unverified refusal path.
+      db.prepare("UPDATE night_jobs SET status = 'queued' WHERE id = ?").run(early.id);
+      const ok = publishNightJob(db, good.id, workRoot);
+      expect(ok.pushed).toBe(true);
+      const refs = execFileSync("git", ["ls-remote", bare, `night/${good.id}`], {
+        encoding: "utf8",
+      }).trim();
+      expect(refs).toContain(`night/${good.id}`);
+      const no = publishNightJob(db, early.id, workRoot);
+      expect(no.pushed).toBe(false);
+      expect(no.note).toContain("not done");
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(bare);
+      cleanup(workRoot);
+    }
+  });
+});
+
+describe("digest (receipt queue)", () => {
+  test("spend to the cent, stops with reasons, verified marks", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      const queue = (task: string) =>
+        queueNightJob(db, {
+          projectPath: snap.project_path,
+          repoSnapshot: snap.bundle_path,
+          baseSha: snap.base_sha,
+          taskPrompt: task,
+          model: "claude-sonnet-4-5",
+          estCostMicro: est.batch_micro_usd,
+          estStandardMicro: est.standard_micro_usd,
+        });
+      queue("Bump a.");
+      queue("Break b.");
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      // Second job fixed the same file twice — both done; fail one by hand
+      // to prove the stopped rendering.
+      const all = listNightJobs(db, "done");
+      db.prepare("UPDATE night_jobs SET status = 'failed' WHERE id = ?").run(all[1].id);
+      const text = buildDigest(db, workRoot);
+      expect(text).toContain("Pru set aside");
+      expect(text).toContain("done");
+      expect(text).toContain("[verified]");
+      expect(text).toContain("failed");
+      expect(text).toContain("[stopped]");
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+});
+
+describe("scheduler plists", () => {
+  test("two ticks, 2am and 6am, same command", () => {
+    const two = graveyardPlist({
+      label: agentLabel(2),
+      hour: 2,
+      pruBin: ["/opt/pru"],
+      testCommand: "npm test",
+      logPath: "/tmp/night.log",
+    });
+    expect(two).toContain(agentLabel(2));
+    expect(two).toContain("<integer>2</integer>");
+    expect(two).toContain("--run");
+    expect(two).toContain("npm test");
+    const six = graveyardPlist({
+      label: agentLabel(6),
+      hour: 6,
+      pruBin: ["/opt/pru"],
+      testCommand: "npm test",
+      logPath: "/tmp/night.log",
+    });
+    expect(six).toContain("<integer>6</integer>");
+  });
+
+  test("schedule writes and unschedule clears (macOS)", () => {
+    if (process.platform !== "darwin") return;
+    const home = mkdtempSync(join(tmpdir(), "pru-n3-home-"));
+    try {
+      const files = scheduleGraveyard({ pruBin: ["/opt/pru"], testCommand: "npm test", home, uid: 59999 });
+      expect(files).toHaveLength(2);
+      for (const f of files) expect(existsSync(f)).toBe(true);
+      const removed = unscheduleGraveyard({ home, uid: 59999 });
+      expect(removed).toHaveLength(2);
+    } finally {
+      cleanup(home);
+    }
   });
 });
