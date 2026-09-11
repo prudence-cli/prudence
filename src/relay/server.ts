@@ -20,6 +20,7 @@ import {
   sessionSpentMicro,
   type Refusal,
 } from "../ledger/db";
+import { compressRequestBody, DEFAULT_MIN_SAVE_TOKENS, type CompressConfig } from "../compress/index";
 import {
   actualCostMicro,
   estimateCall,
@@ -271,6 +272,30 @@ export function createRelay(opts: RelayOptions): RelayContext {
 
     const costMax = estimate.ok ? estimate.cost_max_micro_usd : 0;
 
+    // Compression pass (F3.5): conservative strip-list on a clone, gated by
+    // min_save_tokens. The guard above stays pessimistic — it priced the
+    // ORIGINAL body. req_hash likewise identifies the agent's intent, not
+    // the transported bytes. Off-switch: disable the compression rule or
+    // set PRU_COMPRESS=off.
+    let forwardBody = bodyText;
+    let tokensSaved = 0;
+    // First enabled rule in session > project > global order; none means
+    // byte-identical passthrough (transparent by default).
+    const compressRules = applicableRules(db, "compression", session);
+    const compressCfg =
+      compressRules.length > 0 ? (compressRules[0].config as CompressConfig) : undefined;
+    if (process.env.PRU_COMPRESS !== "off" && compressCfg !== undefined) {
+      const minSave =
+        Number.isFinite(Number(compressCfg?.min_save_tokens)) && Number(compressCfg?.min_save_tokens) > 0
+          ? Math.floor(Number(compressCfg?.min_save_tokens))
+          : DEFAULT_MIN_SAVE_TOKENS;
+      const c = compressRequestBody(body, compressCfg);
+      if (c.savedTokens >= minSave && c.touched > 0) {
+        forwardBody = JSON.stringify(c.body);
+        tokensSaved = c.savedTokens;
+      }
+    }
+
     // Pace check: trailing-minute spend plus this call against every armed
     // rate_limit rule (session > project > global). In-flight reservations
     // count — a concurrent burst trips the pace before any call reconciles.
@@ -311,6 +336,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
       model,
       costMaxMicro: costMax,
       reqHash,
+      tokensSaved,
     });
     if (!reservation.ok) {
       return c.json(refusalBody(noteRefusal(session.id, reqHash) ?? reservation.refusal), 429);
@@ -361,7 +387,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
       upstream = await fetchImpl(upstreamUrlFor(upstreamBase, path), {
         method: "POST",
         headers,
-        body: bodyText,
+        body: forwardBody,
       });
     } catch (err) {
       reconcileCall(db, {

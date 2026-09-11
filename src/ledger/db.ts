@@ -77,6 +77,13 @@ function seedDefaults(db: Database): void {
     `INSERT OR IGNORE INTO ledger_rules (scope, scope_key, kind, config, enabled)
      VALUES ('global', '*', 'loop_guard', '{"window":3,"action":"alert"}', 1)`,
   ).run();
+  // Compression ships on (plan §2.2 default config). "Transparent by default"
+  // governs spend decisions — no caps, no refusals — while this documented,
+  // counted, reversible pass trims noise before billing.
+  db.prepare(
+    `INSERT OR IGNORE INTO ledger_rules (scope, scope_key, kind, config, enabled)
+     VALUES ('global', '*', 'compression', '{"strip":["logs","repeated_json","stack_traces"],"min_save_tokens":200}', 1)`,
+  ).run();
 }
 
 export type SessionRow = {
@@ -159,6 +166,7 @@ export function reserveCall(
     model: string;
     costMaxMicro: number;
     reqHash: string;
+    tokensSaved?: number;
   },
 ): { ok: true; ledgerId: string } | { ok: false; refusal: Refusal } {
   const txn = db.transaction(() => {
@@ -193,9 +201,9 @@ export function reserveCall(
     }
     const ledgerId = `lr_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     db.prepare(
-      `INSERT INTO usage_ledger (id, session_id, upstream, model, reserved_micro_usd, req_hash, truth, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'envelope_estimate', 'reserved', ?)`,
-    ).run(ledgerId, input.session.id, input.upstream, input.model, input.costMaxMicro, input.reqHash, Date.now());
+      `INSERT INTO usage_ledger (id, session_id, upstream, model, reserved_micro_usd, tokens_saved, req_hash, truth, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'envelope_estimate', 'reserved', ?)`,
+    ).run(ledgerId, input.session.id, input.upstream, input.model, input.costMaxMicro, input.tokensSaved ?? 0, input.reqHash, Date.now());
     return { ok: true as const, ledgerId };
   });
   return txn() as

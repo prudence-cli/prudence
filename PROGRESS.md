@@ -117,8 +117,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | F1 Runcap source study → relay design | read gateway+estimator+loop internals; produce /docs/runcap-study.md + /docs/relay-design.md (schema mapping JSONL→SQLite rows, ANTHROPIC_BASE_URL interception mechanics, estimate function spec with envelope context) | ✅ **DONE 2026-09-11** (runcap@0.6.0; 7 files, 4 logical changes — see §7 log) |
 | F2 Reservations + ledger close + pricing + `pru budget/status` | Bun/Hono/`bun:sqlite` relay, txn reserve→reconcile, LOUD typed 429, fixture replay + abort tests | ✅ **DONE 2026-09-11** (11 tests green; $0.10 cap → 429, overshoot ≤ 1 reservation — see §7 log) |
 | F3 Loop guard + rate limit + injection + installer | refusal-retries loop signal, max USD/min, `pru shell`, fresh-checkout proxied with zero manual config | ✅ **DONE 2026-09-11** (17 tests green; storm → loop_blocked — see §7 log) |
-| F3.5 Compression pass | strip-list compression + tallies, echo-mock no-damage proof | ⬜ NEXT |
-| F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ⬜ |
+| F3.5 Compression pass | strip-list compression + tallies, echo-mock no-damage proof | ✅ **DONE 2026-09-11** (26 tests green; 38k-token fixture sheds past threshold — see §7 log) |
+| F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ⬜ NEXT |
 
 ---
 
@@ -188,23 +188,51 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 ## 7. ⏭️ NEXT AGENT ACTION
 
 > **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), `docs/relay-design.md`.
-> Then execute F3.5:
+> Then execute F4:
 
-**F3.5: Compression pass (strip-list parity vs Runcap).**
-1. `src/compress/` ladder per relay-design: compact embedded JSON →
-   collapse log runs (head+tail, logish-gated) → squeeze whitespace.
-   Conservative thresholds, per-rule off-switch, `min_save_tokens` gate.
-2. Wire into the relay pre-forward path; record per-call savings in
-   `usage_ledger.tokens_saved` (+ Tallies row when the voice layer lands).
-   The guard stays pessimistic (estimate on the uncompressed body).
-3. Echo-mock proof: upstream echoes the received body; tests assert the
-   echoed body is semantically identical where it matters and smaller where
-   it counts. No semantic damage, provable.
-4. Update this file: F3.5 ✅, §7 → F4. One PR, ≤5 changes, named owners.
+**F4: Hardening + go public (Meter Watch launch).**
+1. Per-agent fixtures: record one live Claude Code session, anonymize,
+   commit under `tests/fixtures/`; every rules-engine test replays it.
+   Honest coverage docs for routes that ignore `ANTHROPIC_BASE_URL`.
+2. Abort + degrade paths under load; replay determinism across restarts
+   (file DB, not just `:memory:`).
+3. README (savings pitch, install, `pru demo` story), landing pointer,
+   `.gitignore` (at minimum `node_modules/`), LICENSE (MIT vs BSL —
+   owner's call), flip repo public.
+4. `pru demo` 60s scripted story (fake spend → loud fake-cap refusal →
+   replay verify → report) on a cold machine.
+5. Update this file: F4 ✅, §7 → F5 launch, then N-track (Graveyard).
+   One PR, ≤5 changes, named owners.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### F3.5 close-out log (2026-09-11, owner: agent session)
+
+- Built: `src/compress/index.ts` (JSON compaction, log collapse with
+  head+tail+marker, whitespace squeeze, identical-block dedup with verbatim
+  first occurrence; strip-list honored; no delta-encoding — diffs the model
+  must reconstruct in its head are not provably lossless, stays out);
+  relay pre-forward pass gated by `min_save_tokens` (default 200),
+  savings booked in `usage_ledger.tokens_saved`; guard still prices the
+  original body (pessimistic); `compression` rule seeded armed-by-default;
+  CLI `compress on/off` (control-plane switch, 7th command group).
+- Verified: `bun test` 26 pass / 0 fail — ladder units (JSON round-trips,
+  logs collapse while prose survives, small fields untouched, dedup stubs,
+  strip honored); echo-mock relay proof on a deterministic 38k-token
+  fixture (1,200-line log dump + repeated JSON): forwarded bytes shrink
+  past threshold, ledger `tokens_saved` matches measured savings, system
+  prompt and first message byte-identical, log head verbatim + elision
+  marker; $0.05 cap refuses the fixture pre-compression (would-be $0.0018
+  actuals never tempt the guard); disabled rule → byte-identical
+  passthrough; small traffic forwards untouched.
+- Deviations logged: (i) Tallies rows deferred — savings live in
+  `usage_ledger.tokens_saved` until the voice layer lands (per
+  002_plan13_compat). (ii) "Transparent by default" read as governing
+  spend decisions (no caps → no refusals); compression is a documented,
+  counted, reversible default with two off-switches (rule row,
+  `PRU_COMPRESS=off`).
 
 ### F3 close-out log (2026-09-11, owner: agent session)
 

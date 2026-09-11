@@ -183,4 +183,33 @@ pace
     console.log("Pru lifted the pace limit. Sessions are still counted.");
   });
 
+const compress = program.command("compress").description("Trim noise before billing.");
+
+compress
+  .command("on")
+  .description("Trim log and JSON noise before billing (default).")
+  .action(() => {
+    const db = openLedger();
+    setRule(
+      db,
+      "global",
+      "*",
+      "compression",
+      { strip: ["logs", "repeated_json", "stack_traces"], min_save_tokens: 200 },
+      1,
+    );
+    db.close();
+    console.log("Pru will trim noise before billing. Disable with: pru compress off.");
+  });
+
+compress
+  .command("off")
+  .description("Forward requests byte-identical (no trimming).")
+  .action(() => {
+    const db = openLedger();
+    setRule(db, "global", "*", "compression", {}, 0);
+    db.close();
+    console.log("Pru forwards byte-identical. Re-enable with: pru compress on.");
+  });
+
 program.parse();
