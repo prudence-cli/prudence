@@ -1,0 +1,11 @@
+Prudence third-party attributions
+
+Runcap (https://github.com/kirder24-code/ai-agent-manager), MIT License,
+copyright Kirill D. (LaunchSoloAI). Studied at v0.6.0 (2026-09-11) for F1
+relay design: base-URL interception mechanics (pin-upstream-before-rewrite,
+/v1 strip), pre-flight estimation edge cases, session-detection gaps, and
+the lossless compression ladder. No Runcap code is vendored. Techniques
+reused under MIT are reimplemented from the design in
+docs/relay-design.md; divergences (SSE passthrough, SQLite reservations,
+typed loud refusals, envelope-context estimation) are Pru originals.
+Full study: docs/runcap-study.md.

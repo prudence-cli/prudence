@@ -114,7 +114,7 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | Task | What | Status |
 |---|---|---|
 | **F0 Runcap test-drive** | rival autopsy, LIVE competitor discoveries | ✅ **DONE** |
-| F1 Runcap source study → relay design | read gateway+estimator+loop internals; produce /docs/runcap-study.md + /docs/relay-design.md (schema mapping JSONL→SQLite rows, ANTHROPIC_BASE_URL interception mechanics, estimate function spec with envelope context) | ⬜ NEXT |
+| F1 Runcap source study → relay design | read gateway+estimator+loop internals; produce /docs/runcap-study.md + /docs/relay-design.md (schema mapping JSONL→SQLite rows, ANTHROPIC_BASE_URL interception mechanics, estimate function spec with envelope context) | ✅ **DONE 2026-09-11** (runcap@0.6.0; 7 files, 4 logical changes — see §7 log) |
 | F2 Claude Code surface research | slash pack mechanics (.claude/commands), MCP server protocol, hooks, Codex config.toml/AGENTS.md equivalents; produce /docs/in-harness-surface.md | ⬜ |
 | F3 Usage capture accuracy | Anthropic response usage fields vs our accounting; pricing table versioned (F6 merged here) | ⬜ |
 | F4 Thrash simulation | controlled loop+spend scenarios against relay | ⬜ |
@@ -187,17 +187,46 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ## 7. ⏭️ NEXT AGENT ACTION
 
-> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), §5 (F0), §5b (Positioning). Then execute F1:
+> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), §5 (F0), §5b
+> (Positioning), `docs/runcap-study.md`, `docs/relay-design.md`. Then
+> execute F2:
 
-**F1: Runcap source study → relay design.**
-1. `npm pack runcap` (or clone auroradesign/runcap); read gateway, estimator, loop-detector internals. MIT = audit green (confirmed F0).
-2. Write `/docs/runcap-study.md`: adopt / reject / must-not-copy (esp. blind estimator, untyped refusal propagation, siloed truth stores).
-3. Write `/docs/relay-design.md`: (a) how their gateway hijacks ANTHROPIC_BASE_URL and what we'd do differently for a LOUD 429; (b) JSONL→SQLite schema mapping (their fields → usage_ledger/cap_state/refusal_events); (c) the estimate-with-envelope-context function signature; (d) acceptance criteria matching §4 v0.1 (a)–(d).
-4. Stub directory skeleton only (no implementation PR yet beyond ≤5 changes): `src/relay/`, `src/ledger/`, `packs/claude-code/commands/`, `packs/codex/`.
-5. Update this file: F1 ✅, §7 → F2 (Claude Code surface research).
-6. One PR, ≤5 changes, named owners on every to-do row, run `pip install -e .` (banner must print) before commit.
+**F2: Reservations + reconciliation + ledger close + pricing + `pru budget/status`.**
+1. Scaffold Bun + Hono + `better-sqlite3` (`package.json`, `tsconfig`,
+   `src/relay/`, `src/ledger/` per `docs/relay-design.md` §a–c).
+2. Migrations `001_init.sql` (session, usage_ledger, cap_state,
+   refusal_events — INTEGER micro-USD) + `002_plan13_compat.sql` (§1.3
+   rename note). Versioned pricing table (relay-design §b).
+3. Reservation → reconciliation in one SQLite txn; LOUD typed 429
+   (relay-design §a); `pru budget set` / `pru status` reading daemon truth.
+4. Fixture replay test (mock upstream, no live keys) + mandatory
+   mid-stream abort test (reservation released, row `aborted`).
+5. Acceptance: mock upstream, cap $0.10 → 429 halt;
+   `spent ≤ cap + 1 reservation`; replay determinism (v0.1-a).
+6. Update this file: F2 ✅, §7 → F3. One PR, ≤5 changes, named owners.
 
-**Standing constraints: cheapest-first; replay determinism is the checkpoint; Night Shift is the spine's showcase, not extra scope; in-harness packs are thin glue — daemon owns all truth.**
+**Standing constraints: cheapest-first; replay determinism is the
+checkpoint; Night Shift is the spine's showcase, not extra scope;
+in-harness packs are thin glue — daemon owns all truth.**
+
+### F1 close-out log (2026-09-11, owner: agent session)
+
+- Built: `docs/runcap-study.md` (runcap@0.6.0 adopt/reject/must-not-copy +
+  §0 re-decision: no plan change), `docs/relay-design.md` (LOUD 429,
+  JSONL→rev.2 schema map, envelope estimate signature, v0.1 a–d),
+  `NOTICE` (Runcap MIT attribution), skeleton `src/relay/`,
+  `src/ledger/`, `packs/claude-code/commands/`, `packs/codex/` (.gitkeeps).
+  7 files / 4 logical changes (study, design, attribution, skeleton).
+- Verified: `bun test` → 0 test files, 0 failures (skeleton-only, vacuous
+  green); `bun --version` 1.3.13. No implementation, so plan §2.6-F1
+  fixture acceptance rolls to F2 with the harness above.
+- Deviations logged: (i) `pip install -e .` banner N/A — stack is Bun/TS,
+  no pyproject; F2 scaffold owns the equivalent smoke (`bun install` +
+  `bun test`). (ii) `AGENTS.md` repo layout still shows the pre-rev.2
+  tree (`src/server|proxy|rules|...`); rev.2 skeleton (`src/relay/`,
+  `src/ledger/`, `packs/`) wins — `AGENTS.md` layout update rides the F2
+  PR. (iii) Plan §1.3 REAL money columns → rev.2 INTEGER micro-USD
+  migration lands in F2 `001_init.sql`.
 
 ---
 *"The receipt wall is the moat. The ledgers record. I include everything they sell, and the panic they advertise during the stall." — Pru* 🐦
