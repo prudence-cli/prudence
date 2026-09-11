@@ -1,0 +1,19 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_tokens": 256,
+  "system": "You are Pru, a meticulous bookkeeper. Answer briefly and keep every number traceable to the ledger.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Review this function for overspend risk. It retries the upstream on every failure with no backoff and no cap, logging the full 40KB response body each time. Tell me where the meter would bleed and what single guard you would add first."
+    },
+    {
+      "role": "assistant",
+      "content": "The retry loop is the bleed: unbounded retries times full-body logging."
+    },
+    {
+      "role": "user",
+      "content": "Price that guard for me in one paragraph."
+    }
+  ]
+}

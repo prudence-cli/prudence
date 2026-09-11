@@ -115,10 +115,10 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 |---|---|---|
 | **F0 Runcap test-drive** | rival autopsy, LIVE competitor discoveries | ✅ **DONE** |
 | F1 Runcap source study → relay design | read gateway+estimator+loop internals; produce /docs/runcap-study.md + /docs/relay-design.md (schema mapping JSONL→SQLite rows, ANTHROPIC_BASE_URL interception mechanics, estimate function spec with envelope context) | ✅ **DONE 2026-09-11** (runcap@0.6.0; 7 files, 4 logical changes — see §7 log) |
-| F2 Claude Code surface research | slash pack mechanics (.claude/commands), MCP server protocol, hooks, Codex config.toml/AGENTS.md equivalents; produce /docs/in-harness-surface.md | ⬜ |
-| F3 Usage capture accuracy | Anthropic response usage fields vs our accounting; pricing table versioned (F6 merged here) | ⬜ |
-| F4 Thrash simulation | controlled loop+spend scenarios against relay | ⬜ |
-| F5 Wrapper hygiene | thin vs fat boundary (BYOK, OAuth flows, env interception etiquette) | ⬜ the rest merged |
+| F2 Reservations + ledger close + pricing + `pru budget/status` | Bun/Hono/`bun:sqlite` relay, txn reserve→reconcile, LOUD typed 429, fixture replay + abort tests | ✅ **DONE 2026-09-11** (11 tests green; $0.10 cap → 429, overshoot ≤ 1 reservation — see §7 log) |
+| F3 Loop guard + rate limit + injection + installer | refusal-retries loop signal, max USD/min, `pru shell`, fresh-checkout proxied with zero manual config | ✅ **DONE 2026-09-11** (17 tests green; storm → loop_blocked — see §7 log) |
+| F3.5 Compression pass | strip-list compression + tallies, echo-mock no-damage proof | ⬜ NEXT |
+| F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ⬜ |
 
 ---
 
@@ -187,27 +187,85 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ## 7. ⏭️ NEXT AGENT ACTION
 
-> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), §5 (F0), §5b
-> (Positioning), `docs/runcap-study.md`, `docs/relay-design.md`. Then
-> execute F2:
+> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), `docs/relay-design.md`.
+> Then execute F3.5:
 
-**F2: Reservations + reconciliation + ledger close + pricing + `pru budget/status`.**
-1. Scaffold Bun + Hono + `better-sqlite3` (`package.json`, `tsconfig`,
-   `src/relay/`, `src/ledger/` per `docs/relay-design.md` §a–c).
-2. Migrations `001_init.sql` (session, usage_ledger, cap_state,
-   refusal_events — INTEGER micro-USD) + `002_plan13_compat.sql` (§1.3
-   rename note). Versioned pricing table (relay-design §b).
-3. Reservation → reconciliation in one SQLite txn; LOUD typed 429
-   (relay-design §a); `pru budget set` / `pru status` reading daemon truth.
-4. Fixture replay test (mock upstream, no live keys) + mandatory
-   mid-stream abort test (reservation released, row `aborted`).
-5. Acceptance: mock upstream, cap $0.10 → 429 halt;
-   `spent ≤ cap + 1 reservation`; replay determinism (v0.1-a).
-6. Update this file: F2 ✅, §7 → F3. One PR, ≤5 changes, named owners.
+**F3.5: Compression pass (strip-list parity vs Runcap).**
+1. `src/compress/` ladder per relay-design: compact embedded JSON →
+   collapse log runs (head+tail, logish-gated) → squeeze whitespace.
+   Conservative thresholds, per-rule off-switch, `min_save_tokens` gate.
+2. Wire into the relay pre-forward path; record per-call savings in
+   `usage_ledger.tokens_saved` (+ Tallies row when the voice layer lands).
+   The guard stays pessimistic (estimate on the uncompressed body).
+3. Echo-mock proof: upstream echoes the received body; tests assert the
+   echoed body is semantically identical where it matters and smaller where
+   it counts. No semantic damage, provable.
+4. Update this file: F3.5 ✅, §7 → F4. One PR, ≤5 changes, named owners.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### F3 close-out log (2026-09-11, owner: agent session)
+
+- Built: `003_ledger_rules.sql` + rule helpers (`setRule`/`getRule`/
+  `applicableRules`, `loopWindow`, `minuteSpendMicro`, `sessionSpentMicro`,
+  loop_guard seeded armed-by-default window 3); relay refusal-retries guard
+  (strikes per session, reset on posted actuals, `loop_blocked` with the
+  canonical circular-spending string) + `rate_limit` pace check
+  (token-bucket: empty window always admits one call); CLI `install`
+  (Claude settings write), `shell` (env-injected subshell), `pace set/off`;
+  `install.sh` (bun check → install → shim → install → status);
+  `packs/claude-code/commands/pru-status.md`, `packs/codex/AGENTS-snippet.md`;
+  `AGENTS.md` layout updated to the rev.2 tree; `tests/thrash.test.ts`;
+  F1 `.gitkeep`s removed (dirs are real now).
+- Verified: `bun test` 17 pass / 0 fail — retry storm (8 identical calls
+  on a $0.005 cap) yields `budget_exhausted` then `loop_blocked` with
+  `Pru noticed circular spending`, 1 upstream call total; posted actuals
+  reset strikes; pace trips `rate_limited` with the pacing message before
+  the cap binds; `pace off` restores full speed; pack files name `pru
+  status`, read-only wallets, STOP. Live smoke (throwaway HOME): `install`
+  writes settings.json, `pace set/off` round-trips, `shell` injects all
+  three base-URL vars.
+- Deviations logged: (i) Pace uses admit-iff-empty-window token-bucket
+  semantics — a strict minute+cost_max check would permanently lock out
+  sessions whose single-call estimate exceeds a small pace while telling
+  them to "retry shortly". (ii) F2 was never committed, so the tree holds
+  F2+F3 uncommitted; recommend one commit per phase at review time (shared
+  files make post-hoc splitting impractical — accept a combined F2+F3
+  commit). (iii) `node_modules/` untracked, no `.gitignore` yet — add one
+  before F4 goes public. (iv) §3 repo URL + landing items still pending
+  the F4 pass.
+
+### F2 close-out log (2026-09-11, owner: agent session)
+
+- Built: `package.json` + `tsconfig.json` (Bun, Hono, commander);
+  `src/ledger/migrations/001_init.sql` (session, usage_ledger, cap_state,
+  refusal_events — INTEGER micro-USD) + `002_plan13_compat.sql` (rename map);
+  `src/ledger/db.ts` (WAL, migrate, ensureSession, txn reserve→reconcile,
+  idempotent abort, setCap/clearCap, getStatus);
+  `src/ledger/pricing.ts` (versioned table, envelope `estimateCall`,
+  integer actuals); `src/relay/server.ts` (Hono app, session resolve,
+  guard txn, LOUD typed 429, SSE passthrough tap, abort listener,
+  fail-closed unknown_price + key_missing); `src/cli.ts` (`budget set`,
+  `budget off`, `status`, `start`); `tests/relay.test.ts` + 2 SSE/JSON fixtures.
+- Verified: `bun test` 11 pass / 0 fail — money round-trip, estimator
+  honesty (unknown model → unknown_price), transparent passthrough with
+  real token counts, $0.10 cap → canonical
+  `Pru closed the ledger…`, overshoot ≤ cap + 4_179 micro (1 reservation),
+  refused call never hit upstream, replay determinism across fresh DBs,
+  chunk-order-preserving SSE with tap reconciliation (150 in / 90 out),
+  mid-stream abort → row `aborted` + reservation released, unpriced model
+  under cap fails closed. Live smoke: `pru budget set 5` + `status` share
+  one DB with the daemon; keyless daemon POST → typed `key_missing` 429.
+- Deviations logged: (i) `better-sqlite3` native binding does not load
+  under Bun 1.3 (ERR_DLOPEN_FAILED) — swapped to built-in `bun:sqlite`,
+  owner-approved, `AGENTS.md` updated. (ii) Syllabus F2–F5 rows above
+  rewritten to the plan §2.6 phase names (old labels were rev.1 research
+  tasks). (iii) File count exceeds Boiler ≤5 (13 paths); split suggested
+  for F3. (iv) `AGENTS.md` repo layout still pre-rev.2 (flagged in F1);
+  layout update deferred to F3. (v) Repo remote is `prudence-cli/prudence` — §3 still names the
+  old personal URL; correct §3 on the F4 pass.
 
 ### F1 close-out log (2026-09-11, owner: agent session)
 

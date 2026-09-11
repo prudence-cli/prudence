@@ -62,7 +62,9 @@ surveillance. Night features must always carry the batch discount — never
 ## Hard conventions (do not deviate without asking)
 
 - TypeScript on **Bun**; HTTP via **Hono**; DB **SQLite** via
-  `better-sqlite3`; config YAML at `~/.prudence/config.yaml`; ledger DB at
+  `bun:sqlite` (built-in; `better-sqlite3` chosen originally but its native
+  binding does not load under Bun 1.3 — swapped F2, owner-approved);
+  config YAML at `~/.prudence/config.yaml`; ledger DB at
   `~/.prudence/ledger.db`.
 - **Money math in integer micro-USD** (1 USD = 1_000_000 units). Floats only
   at display boundaries.
@@ -82,17 +84,18 @@ surveillance. Night features must always carry the batch discount — never
 
 ```
 src/
-  server/      # Hono app, route handlers (/v1/messages, /v1/*)
-  proxy/       # forwarder, SSE tap, auth replacement
-  rules/       # ledger rules engine (budget, rate_limit, loop_guard, compression)
-  compress/    # token-compression pass (parity vs Runcap)
-  store/       # sqlite layer, migrations, txn helpers
-  pricing/     # price table, estimators
-  cli/         # `pru` commands (commander)
+  relay/       # Hono app, guard txn, SSE tap, LOUD 429s
+  ledger/      # sqlite layer, migrations, pricing, txn helpers
+  compress/    # token-compression pass, F3.5 (parity vs Runcap)
   graveyard/   # product 2 (later): snapshotter, diff_builder, batch_client
+  cli.ts       # `pru` commands (commander)
+packs/
+  claude-code/commands/  # /pru:* slash pack (thin glue; daemon owns truth)
+  codex/                 # AGENTS.md engraving snippet
 tests/
   fixtures/    # recorded SSE streams + requests
   *.test.ts
+docs/          # runcap-study, relay-design (F1 build contracts)
 install.sh
 NOTICE           # third-party attributions (incl. Runcap study notes)
 ```

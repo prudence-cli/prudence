@@ -1,0 +1,11 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_pru_fixture_1","model":"claude-sonnet-4-5","usage":{"input_tokens":150,"output_tokens":0}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The guard goes before the call."}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{},"usage":{"input_tokens":150,"output_tokens":90}}
+
+event: message_stop
+data: {"type":"message_stop"}

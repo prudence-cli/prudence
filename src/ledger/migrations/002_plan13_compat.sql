@@ -1,0 +1,21 @@
+-- 002_plan13_compat.sql — rename map, plan §1.3 names to rev.2 (PROGRESS §4).
+-- No DDL: rev.2 ships directly in 001. This file is the audit trail so a
+-- reviewer holding the plan doc can trace every table.
+--
+--   plan §1.3  sessions      -> rev.2  session        (singular; same grain)
+--   plan §1.3  requests      -> rev.2  usage_ledger   (+ reserved_micro_usd,
+--                              tokens_saved, truth, status lifecycle)
+--   plan §1.3  ledger_rules  -> rev.2  cap_state      (materialized limits +
+--                              live spent/reserved counters; rule *kinds*
+--                              beyond budget arrive in F3)
+--   plan §1.3  tallies       -> rev.2  (deferred)     (Tallies ship with the
+--                              voice layer; compression_saving references
+--                              usage_ledger.tokens_saved until then)
+--   plan §1.3  night_jobs    -> rev.2  (deferred)     (Graveyard N-track)
+--   Runcap gateway-events.jsonl fields -> usage_ledger / refusal_events
+--                              (see docs/relay-design.md §b for the
+--                              field-by-field map)
+--
+-- Money: plan §1.3 used REAL cost columns. Rev.2 uses INTEGER micro-USD
+-- everywhere (AGENTS.md hard convention). No REAL money column ships.
+SELECT 2;
