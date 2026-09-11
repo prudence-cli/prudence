@@ -20,6 +20,8 @@ import {
 import { createRelay, type FetchLike } from "./relay/server";
 import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
+import { AnthropicBatchClient } from "./graveyard/batch_client";
+import { runDueJobs } from "./graveyard/runner";
 import type { Hono } from "hono";
 
 const program = new Command();
@@ -357,8 +359,41 @@ const graveyard = program
       );
       console.log(
         `Estimate: ${fmtUsd(est.batch_micro_usd)} at batch price vs ${fmtUsd(est.standard_micro_usd)} standard — ` +
-          `about ${fmtUsd(est.saved_micro_usd)} stays in your pocket. Runs in the night window; watch with: pru graveyard list.`,
+          `about ${fmtUsd(est.saved_micro_usd)} stays in your pocket. Runs in the night window; watch with: pru graveyard.`,
       );
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exitCode = 1;
+    } finally {
+      db.close();
+    }
+  });
+
+graveyard
+  .command("run")
+  .description("Work the queue: submit due jobs, settle submitted ones.")
+  .option("--test-command <cmd>", "verification run on base AND night branch", "npm test --silent")
+  .option("--work-root <dir>", "where night workdirs live")
+  .action(async (opts: { testCommand: string; workRoot?: string }) => {
+    const db = openLedger();
+    try {
+      const workRoot = opts.workRoot ?? join(process.env.HOME ?? ".", ".prudence", "night");
+      const reports = await runDueJobs(db, {
+        workRoot,
+        testCommand: opts.testCommand,
+        client: new AnthropicBatchClient(),
+      });
+      if (reports.length === 0) {
+        console.log("Pru worked the queue: nothing reached a terminal state.");
+        return;
+      }
+      let bad = 0;
+      for (const r of reports) {
+        console.log(`--- ${r.job_id}: ${r.status} ---`);
+        console.log(r.markdown);
+        if (r.status !== "done") bad += 1;
+      }
+      if (bad > 0) process.exitCode = 1;
     } catch (err) {
       console.error((err as Error).message);
       process.exitCode = 1;

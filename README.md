@@ -8,8 +8,9 @@ the moment a session overspends — loudly, with the exact next command.
   circular-spending guard, and noise trimmed before billing.
 - **The Ledger** — every call booked in SQLite: posted spend, reservations,
   typed refusals. One row of truth, rendered the same everywhere.
-- **Graveyard Shift** *(next)* — non-urgent work at half price through
-  batch execution. The spine above is its showcase.
+- **Graveyard Shift** — non-urgent work at half price through batch
+  execution: snapshot, diff-only payload, `git apply --check`, base-vs-branch
+  tests compared before anything commits. Queue with `pru graveyard`.
 
 ## How it works
 
@@ -61,6 +62,8 @@ report. The whole product before a real key.
 | `pru status` | Read the ledger for the latest session |
 | `pru shell -- <cmd>` | Run anything through the meter |
 | `pru demo` | The 60-second story |
+| `pru graveyard "task"` | Queue half-price night work (exact 50% math up front) |
+| `pru graveyard run` | Submit due jobs, settle submitted ones (safety net inside) |
 
 Inside the harnesses: `/pru:status` slash pack for Claude Code and an
 `AGENTS.md` engraving for Codex live in `packs/`. The daemon owns all
@@ -69,7 +72,7 @@ truth; the packs are thin glue.
 ## Verification
 
 ```sh
-bun test   # 29 fixture-replay tests, mock upstreams only — never live APIs
+bun run check   # tsc + 42 fixture-replay tests, mock upstreams only — never live APIs
 ```
 
 Design contracts: `docs/relay-design.md`, `docs/runcap-study.md`,

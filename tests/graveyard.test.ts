@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { snapshotRepo, SNAPSHOT_MAX_CHARS } from "../src/graveyard/snapshot";
 import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../src/graveyard/diff_builder";
+import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
+import { runDueJobs } from "../src/graveyard/runner";
 import { listNightJobs, openLedger, queueNightJob } from "../src/ledger/db";
 
 function git(cwd: string, ...args: string[]) {
@@ -158,5 +160,170 @@ describe("dry-run queue", () => {
       cleanup(dir);
     }
     db.close();
+  });
+});
+
+const FIX_DIFF = `--- a/src/a.ts
++++ b/src/a.ts
+@@ -1 +1 @@
+-export const a = 1;
++export const a = 2;
+`;
+const BROKEN_DIFF = `--- a/src/nope.ts
++++ b/src/nope.ts
+@@ -1 +1 @@
+-missing context line that never matched anything here
++replacement
+`;
+
+// Queue one job for dir, then work it with a scripted mock batch.
+async function workOneJob(
+  dir: string,
+  task: string,
+  cannedDiff: string,
+  testCommand: string,
+  workRoot: string,
+) {
+  const db = openLedger(":memory:");
+  const snap = snapshotRepo(dir);
+  const payload = buildDiffPayload(snap, task, "claude-sonnet-4-5");
+  const est = estimateNightJob(payload)!;
+  const job = queueNightJob(db, {
+    projectPath: snap.project_path,
+    repoSnapshot: snap.bundle_path,
+    baseSha: snap.base_sha,
+    taskPrompt: task,
+    model: "claude-sonnet-4-5",
+    estCostMicro: est.batch_micro_usd,
+  });
+  const reports = await runDueJobs(db, {
+    workRoot,
+    testCommand,
+    client: new MockBatchClient(cannedDiff),
+  });
+  const rows = listNightJobs(db);
+  db.close();
+  return { job, reports, rows, bundle: snap.bundle_path };
+}
+
+function mkWorkRoot(): string {
+  const dir = mkdtempSync(join(tmpdir(), "pru-n2-work-"));
+  return dir;
+}
+
+describe("night runner (mock batch)", () => {
+  test("improvement: base fails, branch passes, committed with report", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { job, reports, rows, bundle } = await workOneJob(
+        dir, "Bump a.", FIX_DIFF, 'grep -q "a = 2" src/a.ts', workRoot,
+      );
+      expect(rows[0].status).toBe("done");
+      expect(reports).toHaveLength(1);
+      expect(reports[0].markdown).toContain("Base tests: FAIL | Night tests: PASS");
+      expect(reports[0].markdown).toContain("improvement");
+      // Commit exists in the night workdir; the live repo is untouched.
+      const log = execFileSync("git", ["log", "--oneline", `night/${job.id}`], {
+        cwd: join(workRoot, job.id, "work"),
+        encoding: "utf8",
+      });
+      expect(log).toContain(`night/${job.id}`);
+      const branches = execFileSync("git", ["branch", "--list", "night/*"], {
+        cwd: dir,
+        encoding: "utf8",
+      }).trim();
+      expect(branches).toBe("");
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("no regression: green stays green, committed", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { rows, reports, bundle } = await workOneJob(dir, "Bump a.", FIX_DIFF, "true", workRoot);
+      expect(rows[0].status).toBe("done");
+      expect(reports[0].markdown).toContain("Base tests: PASS | Night tests: PASS");
+      expect(reports[0].markdown).toContain("no regression");
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("regression: branch fails, nothing committed", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { job, rows, reports, bundle } = await workOneJob(
+        dir, "Bump a.", FIX_DIFF, 'grep -q "a = 1" src/a.ts', workRoot,
+      );
+      expect(rows[0].status).toBe("failed");
+      expect(reports[0].markdown).toContain("Base tests: PASS | Night tests: FAIL");
+      const count = execFileSync("git", ["rev-list", "--count", "HEAD"], {
+        cwd: join(workRoot, job.id, "work"),
+        encoding: "utf8",
+      }).trim();
+      expect(count).toBe("1");
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("conflict: unappliable diff kept as artifact, nothing committed", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { job, rows, reports, bundle } = await workOneJob(
+        dir, "Bump a.", BROKEN_DIFF, "true", workRoot,
+      );
+      expect(rows[0].status).toBe("conflict");
+      expect(reports[0].markdown).toContain("conflict");
+      const fs = await import("node:fs");
+      expect(fs.existsSync(join(workRoot, job.id, "result.diff"))).toBe(true);
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("unusable batch result fails without touching the tree", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { rows, reports, bundle } = await workOneJob(dir, "Bump a.", "", "true", workRoot);
+      expect(rows[0].status).toBe("failed");
+      expect(reports[0].markdown).toContain("unusable");
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+});
+
+describe("result JSONL extraction", () => {
+  test("strict: one job, one text block, or null", () => {
+    const good = JSON.stringify({
+      custom_id: "nj_1",
+      result: { type: "succeeded", message: { content: [{ type: "text", text: "diff-here" }] } },
+    });
+    const other = JSON.stringify({
+      custom_id: "nj_2",
+      result: { type: "succeeded", message: { content: [{ type: "text", text: "nope" }] } },
+    });
+    expect(extractDiffForJob(`${other}\n${good}`, "nj_1")).toBe("diff-here");
+    expect(extractDiffForJob("not json", "nj_1")).toBeNull();
+    expect(extractDiffForJob(good, "nj_missing")).toBeNull();
+    const failed = JSON.stringify({ custom_id: "nj_1", result: { type: "errored" } });
+    expect(extractDiffForJob(failed, "nj_1")).toBeNull();
   });
 });

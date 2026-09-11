@@ -121,7 +121,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ✅ **DONE (code) 2026-09-11** (29 tests green; `pru demo` tells the story — owner gates left: LICENSE, public flip, live capture — see §7 log) |
 | F5 Meter Watch launch | headline leads with savings | ✅ **LAUNCHED 2026-09-11** (repo PUBLIC, MIT, tsc+29 green, CHANGELOG — see §7 log) |
 | N1 Graveyard: snapshot + diff builder | snapshotter, diff payload, 50%-priced estimate, queued jobs | ✅ **DONE 2026-09-11** (36 tests green; live-repo smoke $0.19 vs $0.38 — see §7 log) |
-| N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ⬜ NEXT |
+| N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ✅ **DONE 2026-09-11** (42 tests green; improvement commits, regression stops — see §7 log) |
+| N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ⬜ NEXT |
 
 ---
 
@@ -188,16 +189,42 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — N2 BATCH CLIENT (Meter Watch launched, N1 done)
+## 7. ⏭️ NEXT AGENT ACTION — N3 MORNING REPORT (Meter Watch launched, N2 done)
 
-> Execute **N2: batch client state machine + diff application + safety net**
-> (plan §3.2–§3.5): queued → submitted (2am) → polled (6am) → `git apply
-> --check` → test_command on base AND night branch, compared → report.
-> Mock the Batches API in tests (fixtures, never live). No network in tests.
+> Execute **N3: morning report + tally math + auto-PR + dogfood**
+> (plan §3.6): one overnight run lands as a PR unassisted. Pieces:
+> `pru graveyard digest` (receipt queue: spend to the cent, stops + why,
+> replay-verified badge — inside the harness the user already stares at),
+> Tallies `night_discount` rows from est-vs-standard math, optional
+> push/PR, then a real dogfood night. Scheduler wiring (launchd 2am/6am)
+> belongs here, not earlier.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### N2 close-out log (2026-09-11, owner: agent session)
+
+- Built: `src/graveyard/batch_client.ts` (Anthropic Batches shape —
+  submit/poll/results, live only; `MockBatchClient` scripted per
+  scenario; strict `extractDiffForJob`: one job, one text block, or
+  null); `src/graveyard/runner.ts` (`runDueJobs`: submit queued, settle
+  submitted — frozen bundle clone, `git apply --check`, test_command on
+  base AND night branch compared, commit on improvement/no-regression,
+  `conflict`/`failed` otherwise with artifacts kept, markdown report per
+  job saved to the job dir); `updateNightJob`; `pru graveyard run`
+  (--test-command, --work-root, nonzero exit on terminal failures).
+- Verified: `bun run check` 42 pass / 0 fail — improvement commits with
+  the right verdict line, green-stays-green commits, regression leaves
+  HEAD at 1 commit, unappliable diff keeps `result.diff` + `conflict`,
+  unusable result fails clean, live repo untouched (no `night/*`
+  branches outside workdirs).
+- Deviations logged: (i) No retry-with-conflict-context round-trip in
+  N2 — a conflict is terminal with artifact; the retry belongs to N3
+  polish if the dogfood demands it. (ii) `real_cost_micro_usd` stays
+  null until live invoice data exists; reports show the batched
+  estimate honestly. (iii) Scheduler (launchd 2am/6am) deferred to N3
+  with the morning digest.
 
 ### F5 + N1 close-out log (2026-09-11, owner: agent session)
 

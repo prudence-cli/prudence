@@ -530,3 +530,36 @@ export function listNightJobs(db: Database, status?: string): NightJobRow[] {
   }
   return db.query("SELECT * FROM night_jobs ORDER BY queued_at DESC").all() as NightJobRow[];
 }
+
+export function updateNightJob(
+  db: Database,
+  id: string,
+  patch: {
+    status?: string;
+    batch_id?: string | null;
+    real_cost_micro_usd?: number | null;
+    finished_at?: number | null;
+  },
+): void {
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (patch.status !== undefined) {
+    sets.push("status = ?");
+    vals.push(patch.status);
+  }
+  if (patch.batch_id !== undefined) {
+    sets.push("batch_id = ?");
+    vals.push(patch.batch_id);
+  }
+  if (patch.real_cost_micro_usd !== undefined) {
+    sets.push("real_cost_micro_usd = ?");
+    vals.push(patch.real_cost_micro_usd);
+  }
+  if (patch.finished_at !== undefined) {
+    sets.push("finished_at = ?");
+    vals.push(patch.finished_at);
+  }
+  if (sets.length === 0) return;
+  vals.push(id);
+  db.prepare(`UPDATE night_jobs SET ${sets.join(", ")} WHERE id = ?`).run(...(vals as []));
+}

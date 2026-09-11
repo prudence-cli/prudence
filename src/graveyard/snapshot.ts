@@ -43,13 +43,9 @@ export type Snapshot = {
   truncated: boolean;
 };
 
-export function snapshotRepo(projectPath: string, jobId?: string): Snapshot {
-  const cwd = projectPath;
-  const baseSha = git(cwd, "rev-parse", "HEAD");
-  const id = jobId ?? randomUUID().replace(/-/g, "").slice(0, 12);
-  const bundlePath = join(tmpdir(), `pru-graveyard-${id}.bundle`);
-  git(cwd, "bundle", "create", bundlePath, "HEAD");
-
+// Shared file selection: tracked text files under the cap. Used on live
+// repos (snapshotRepo) and on frozen bundle checkouts (the runner).
+export function readTextFiles(cwd: string): { files: SnapshotFile[]; total_chars: number; truncated: boolean } {
   const tracked = git(cwd, "ls-files").split("\n").map((s) => s.trim()).filter(Boolean);
   const files: SnapshotFile[] = [];
   let total = 0;
@@ -71,6 +67,17 @@ export function snapshotRepo(projectPath: string, jobId?: string): Snapshot {
     total += content.length;
     files.push({ path: rel, chars: content.length, content });
   }
+  return { files, total_chars: total, truncated };
+}
+
+export function snapshotRepo(projectPath: string, jobId?: string): Snapshot {
+  const cwd = projectPath;
+  const baseSha = git(cwd, "rev-parse", "HEAD");
+  const id = jobId ?? randomUUID().replace(/-/g, "").slice(0, 12);
+  const bundlePath = join(tmpdir(), `pru-graveyard-${id}.bundle`);
+  git(cwd, "bundle", "create", bundlePath, "HEAD");
+
+  const { files, total_chars: total, truncated } = readTextFiles(cwd);
   if (files.length === 0) {
     throw new Error(`Pru found no text files to snapshot in ${cwd}.`);
   }
