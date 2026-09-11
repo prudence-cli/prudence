@@ -118,7 +118,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | F2 Reservations + ledger close + pricing + `pru budget/status` | Bun/Hono/`bun:sqlite` relay, txn reserve→reconcile, LOUD typed 429, fixture replay + abort tests | ✅ **DONE 2026-09-11** (11 tests green; $0.10 cap → 429, overshoot ≤ 1 reservation — see §7 log) |
 | F3 Loop guard + rate limit + injection + installer | refusal-retries loop signal, max USD/min, `pru shell`, fresh-checkout proxied with zero manual config | ✅ **DONE 2026-09-11** (17 tests green; storm → loop_blocked — see §7 log) |
 | F3.5 Compression pass | strip-list compression + tallies, echo-mock no-damage proof | ✅ **DONE 2026-09-11** (26 tests green; 38k-token fixture sheds past threshold — see §7 log) |
-| F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ⬜ NEXT |
+| F4 Hardening + go public | per-agent fixtures, README, landing, repo public + LICENSE | ✅ **DONE (code) 2026-09-11** (29 tests green; `pru demo` tells the story — owner gates left: LICENSE, public flip, live capture — see §7 log) |
+| F5 Meter Watch launch | headline leads with savings | ⬜ NEXT, then N-track (Graveyard) |
 
 ---
 
@@ -185,28 +186,44 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION
+## 7. ⏭️ NEXT AGENT ACTION — OWNER GATES, then F5/N-track
 
-> **START HERE.** Read §2 (Boilers), §4 (Anatomy rev.2), `docs/relay-design.md`.
-> Then execute F4:
-
-**F4: Hardening + go public (Meter Watch launch).**
-1. Per-agent fixtures: record one live Claude Code session, anonymize,
-   commit under `tests/fixtures/`; every rules-engine test replays it.
-   Honest coverage docs for routes that ignore `ANTHROPIC_BASE_URL`.
-2. Abort + degrade paths under load; replay determinism across restarts
-   (file DB, not just `:memory:`).
-3. README (savings pitch, install, `pru demo` story), landing pointer,
-   `.gitignore` (at minimum `node_modules/`), LICENSE (MIT vs BSL —
-   owner's call), flip repo public.
-4. `pru demo` 60s scripted story (fake spend → loud fake-cap refusal →
-   replay verify → report) on a cold machine.
-5. Update this file: F4 ✅, §7 → F5 launch, then N-track (Graveyard).
-   One PR, ≤5 changes, named owners.
+> **F4 code is done. Owner gates resolved 2026-09-11:**
+> 1. **LICENSE: MIT** — committed. (Copyright names Ronny Sanchez Merino;
+>    say the word if the holder should read differently.)
+> 2. **Visibility: stay private** — public flip rides F5 launch.
+> 3. **Live capture: open** — no answer yet; SYNTHETIC fixtures stand,
+>    labeled, until a real anonymized capture lands.
+> Landing page waits on the domain decision.
+>
+> Next: **F5 (launch)** then the **N-track (Graveyard)**: N1 snapshotter +
+> diff builder with 50%-priced estimates (plan §3.6).
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
+
+### F4 close-out log (2026-09-11, owner: agent session)
+
+- Built: `tests/durability.test.ts` (file-DB close/reopen/continue,
+  cross-file replay equality, concurrent-burst reservation safety — no
+  dangling `reserved` rows or cap counters); `docs/coverage.md` (route
+  table, usage semantics, four honest gaps); synthetic-but-faithful
+  `claude-code-session.json` + `claude-code-stream-sse.txt` (tool_use
+  turns, cached usage → 6,900 micro actuals, replayed green);
+  `README.md` (savings pitch, install, control-plane table, demo story);
+  `.gitignore`; `pru demo` (in-process stub upstream: 4 posted calls on a
+  $0.01 cap → canonical refusal → `loop_blocked` storm guard → replay
+  verify → report; throwaway DBs, zero trace).
+- Verified: `bun test` 29 pass / 0 fail across 4 files; `pru demo` runs
+  the v0.1 (a)–(d) story end to end on a cold checkout with no keys.
+- Deviations logged: (i) Live capture is SYNTHETIC and labeled — no keys
+  exist in this environment and tests must never call live APIs; swap on
+  owner capture. (ii) No OpenAI-compat fixture yet (extractors handle both
+  envelopes; parity unclaimed). (iii) Loop strikes are per-daemon-run
+  (documented in coverage.md; DB-derived counter is clean F5 work).
+  (iv) LICENSE + public flip + landing explicitly not done — owner gates
+  above.
 
 ### F3.5 close-out log (2026-09-11, owner: agent session)
 

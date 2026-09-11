@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 // `pru` — the bookkeeper's CLI. F2 surfaces: budget, status, start.
-// F3 surfaces: install, shell, pace.
+// F3 surfaces: install, shell, pace. F3.5: compress. F4: demo.
 
 import { Command } from "commander";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   clearCap,
@@ -210,6 +211,96 @@ compress
     setRule(db, "global", "*", "compression", {}, 0);
     db.close();
     console.log("Pru forwards byte-identical. Re-enable with: pru compress on.");
+  });
+
+program
+  .command("demo")
+  .description("The 60-second story: fake spend, loud refusal, replay verify, report.")
+  .action(async () => {
+    // Everything below runs in-process against throwaway file DBs and a
+    // stub upstream. No keys, no network, no trace left behind.
+    const stubUpstream = (async () =>
+      new Response(
+        JSON.stringify({
+          id: "msg_demo_1",
+          model: "claude-sonnet-4-5",
+          content: [{ type: "text", text: "demo" }],
+          usage: { input_tokens: 150, output_tokens: 90 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as typeof fetch;
+    const demoBody = {
+      model: "claude-sonnet-4-5",
+      max_tokens: 256,
+      system: "You are a demo ledger entry.",
+      messages: [{ role: "user", content: "Spend a little, then stop me." }],
+    };
+    const fire = async (app: { request: typeof fetch }) =>
+      (app.request as (input: string, init?: RequestInit) => Promise<Response>)(
+        "http://localhost/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-pru-agent": "demo-agent",
+            "x-pru-project": "demo-project",
+          },
+          body: JSON.stringify(demoBody),
+        },
+      ).then(async (r) => ({ status: r.status, text: await r.text() }));
+
+    const runTape = async (dbPath: string) => {
+      const db = openLedger(dbPath);
+      const { app } = createRelay({
+        db,
+        upstreamBaseUrl: "https://api.anthropic.com",
+        upstreamApiKey: "sk-demo",
+        fetchImpl: stubUpstream,
+      });
+      setCap(db, "global", "*", usdToMicro(0.01));
+      const timeline: { status: number; text: string }[] = [];
+      for (let i = 0; i < 8; i++) timeline.push(await fire(app));
+      const books = db.query(
+        "SELECT model, input_tokens, output_tokens, cost_micro_usd, status, truth FROM usage_ledger ORDER BY created_at",
+      ).all();
+      const refusals = db.query(
+        "SELECT type, message FROM refusal_events ORDER BY id",
+      ).all() as { type: string; message: string }[];
+      db.close();
+      return { timeline, books, refusals };
+    };
+
+    const dbA = join(tmpdir(), `pru-demo-${Date.now()}-a.db`);
+    const dbB = join(tmpdir(), `pru-demo-${Date.now()}-b.db`);
+    try {
+      console.log("Pru demo: a $0.01 session against a stub upstream.");
+      const first = await runTape(dbA);
+      const spent = first.books.length;
+      console.log(`Fake spend: ${spent} calls posted before the books closed.`);
+      const refusal = first.refusals[0];
+      console.log(`Loud refusal [${refusal.type}]: ${refusal.message}`);
+      const loop = first.refusals.find((r) => r.type === "loop_blocked");
+      if (loop) console.log(`Storm guard [loop_blocked]: ${loop.message}`);
+      const second = await runTape(dbB);
+      const match =
+        JSON.stringify(first.books) === JSON.stringify(second.books) &&
+        JSON.stringify(first.refusals) === JSON.stringify(second.refusals);
+      console.log(match ? "Replay verify: ledgers match." : "Replay verify: LEDGERS DIFFER.");
+      const total = (second.books as { cost_micro_usd: number }[]).reduce(
+        (s, r) => s + r.cost_micro_usd,
+        0,
+      );
+      console.log(
+        `Report: ${second.books.length} calls, ${fmtUsd(total)} posted, ${second.refusals.length} refusals on the books.`,
+      );
+      if (!match) process.exitCode = 1;
+    } finally {
+      for (const f of [dbA, dbB]) {
+        for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+          try { rmSync(`${f}${suffix}`); } catch { /* already gone */ }
+        }
+      }
+    }
   });
 
 program.parse();

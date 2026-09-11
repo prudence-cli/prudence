@@ -1,0 +1,14 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_claudecode_1","model":"claude-sonnet-4-5","usage":{"input_tokens":1200,"cache_creation_input_tokens":400,"cache_read_input_tokens":8000,"output_tokens":0}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Fixed. Running tests now."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"command\": \"npm test\"}"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":1200,"cache_read_input_tokens":8000,"output_tokens":300}}
+
+event: message_stop
+data: {"type":"message_stop"}

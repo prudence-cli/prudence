@@ -1,0 +1,52 @@
+{
+  "_note": "SYNTHETIC fixture (F4). Modeled on the documented Anthropic Messages API shapes for a Claude Code agentic turn: system block array, tool_use / tool_result content blocks, prompt-caching usage fields. No live traffic was available in this session (no API keys; tests must never call live APIs). Replace with an anonymized real capture when one exists — see docs/coverage.md.",
+  "model": "claude-sonnet-4-5",
+  "max_tokens": 1024,
+  "system": [
+    {
+      "type": "text",
+      "text": "You are Claude Code, an agentic coding assistant. Keep answers short.",
+      "cache_control": { "type": "ephemeral" }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Fix the off-by-one in src/paginate.ts. Run the tests after."
+    },
+    {
+      "role": "assistant",
+      "content": [
+        { "type": "text", "text": "I will read the file first." },
+        { "type": "tool_use", "id": "toolu_01", "name": "Read", "input": { "file_path": "/repo/src/paginate.ts" } }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01",
+          "content": "export function page(items: string[], n: number) {\n  return items.slice(0, n + 1);\n}\n"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        { "type": "text", "text": "Found it. Applying the fix." },
+        { "type": "tool_use", "id": "toolu_02", "name": "Edit", "input": { "file_path": "/repo/src/paginate.ts", "old_string": "n + 1", "new_string": "n" } }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_02",
+          "content": "ok"
+        }
+      ]
+    }
+  ]
+}

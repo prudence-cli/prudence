@@ -294,3 +294,38 @@ describe("unpriced model under a cap", () => {
     db.close();
   });
 });
+
+describe("claude-code agent shape (synthetic live-shape fixture)", () => {
+  test("tool_use turns with cached usage post exact actuals", async () => {
+    const db = openLedger(":memory:");
+    const sse = readFileSync(join(FIX, "claude-code-stream-sse.txt"), "utf8");
+    const fetchImpl = (async () =>
+      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as typeof fetch;
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.anthropic.com",
+      upstreamApiKey: "sk-test",
+      fetchImpl,
+    });
+    const body = JSON.parse(
+      readFileSync(join(FIX, "claude-code-session.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const res = await post(app, { ...body, stream: true });
+    expect(res.status).toBe(200);
+    await res.text();
+    for (let i = 0; i < 100; i++) {
+      const row = db.query("SELECT status FROM usage_ledger").get() as { status: string } | null;
+      if (row && row.status !== "reserved") break;
+      await Bun.sleep(10);
+    }
+    const row = db.query("SELECT * FROM usage_ledger").get() as Record<string, unknown>;
+    expect(row.status).toBe("ok");
+    expect(row.input_tokens).toBe(1200);
+    expect(row.output_tokens).toBe(300);
+    expect(row.cached_tokens).toBe(8000);
+    // 1200 fresh in at $3/1M is 0 here (all cached): 8000 cached at $0.30/1M
+    // + 300 out at $15/1M = 2400 + 4500.
+    expect(row.cost_micro_usd).toBe(6900);
+    db.close();
+  });
+});
