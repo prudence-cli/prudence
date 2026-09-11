@@ -3,7 +3,7 @@
 // F3 surfaces: install, shell, pace. F3.5: compress. F4: demo.
 
 import { Command } from "commander";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -13,8 +13,10 @@ import {
   listNightJobs,
   openLedger,
   queueNightJob,
+  recentTallies,
   setCap,
   setRule,
+  tallyTotals,
   usdToMicro,
 } from "./ledger/db";
 import { createRelay, type FetchLike } from "./relay/server";
@@ -22,6 +24,9 @@ import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
 import { AnthropicBatchClient } from "./graveyard/batch_client";
 import { runDueJobs } from "./graveyard/runner";
+import { publishNightJob } from "./graveyard/publish";
+import { scheduleGraveyard, unscheduleGraveyard } from "./graveyard/schedule";
+import { buildDigest } from "./graveyard/digest";
 import type { Hono } from "hono";
 
 const program = new Command();
@@ -132,8 +137,26 @@ program
     }
     const env = (settings.env ?? {}) as Record<string, string>;
     settings.env = { ...env, ANTHROPIC_BASE_URL: `http://localhost:${port}` };
+    // Read-only wallet commands the slash packs invoke. Merged
+    // idempotently — existing permissions are never removed.
+    const PACK_COMMANDS = ["Bash(pru status)", "Bash(pru graveyard --digest)", "Bash(pru tallies)"];
+    const permissions = (settings.permissions ?? {}) as Record<string, unknown>;
+    const allow = Array.isArray(permissions.allow) ? [...(permissions.allow as unknown[])] : [];
+    let added = 0;
+    for (const entry of PACK_COMMANDS) {
+      if (!allow.includes(entry)) {
+        allow.push(entry);
+        added += 1;
+      }
+    }
+    settings.permissions = { ...permissions, allow };
     writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
     console.log(`Pru installed: Claude Code traffic now settles through http://localhost:${port}.`);
+    console.log(
+      added > 0
+        ? `Pru allowlisted ${added} read-only wallet command(s) for the slash packs.`
+        : "Pru wallet commands already allowlisted.",
+    );
     console.log(`For Codex and OpenAI-compat tools: export OPENAI_BASE_URL=http://localhost:${port}/v1 — or run: pru shell`);
   });
 
@@ -312,15 +335,110 @@ program
     }
   });
 
-const graveyard = program
+program
   .command("graveyard")
   .description("Half-price overnight work (no task lists the queue).")
   .argument("[task...]", "non-urgent task to queue for the night window")
   .option("--model <model>", "model for the night run", "claude-sonnet-4-5")
   .option("--path <path>", "repo to snapshot (default: cwd)")
-  .action((task: string[], opts: { model: string; path?: string }) => {
-    const db = openLedger();
-    try {
+  .option("--run", "work the queue: submit due jobs, settle submitted ones")
+  .option("--digest", "print the morning receipt queue")
+  .option("--publish <id>", "push a verified branch to origin")
+  .option("--pr", "with --publish: open the PR too (needs gh)")
+  .option("--schedule", "install 2am/6am launchd ticks (macOS)")
+  .option("--unschedule", "remove the launchd ticks")
+  .option("--test-command <cmd>", "verification run on base AND night branch", "npm test --silent")
+  .option("--work-root <dir>", "where night workdirs live")
+  .action(
+    async (
+      task: string[],
+      opts: {
+        model: string;
+        path?: string;
+        run?: boolean;
+        digest?: boolean;
+        publish?: string;
+        pr?: boolean;
+        schedule?: boolean;
+        unschedule?: boolean;
+        testCommand: string;
+        workRoot?: string;
+      },
+    ) => {
+      await runGraveyardAction(task, opts);
+    },
+  );
+
+async function runGraveyardAction(
+  task: string[],
+  opts: {
+    model: string;
+    path?: string;
+    run?: boolean;
+    digest?: boolean;
+    publish?: string;
+    pr?: boolean;
+    schedule?: boolean;
+    unschedule?: boolean;
+    testCommand: string;
+    workRoot?: string;
+  },
+): Promise<void> {
+  const db = openLedger();
+  const workRoot = opts.workRoot ?? join(process.env.HOME ?? ".", ".prudence", "night");
+  try {
+    if (opts.run) {
+      const reports = await runDueJobs(db, {
+        workRoot,
+        testCommand: opts.testCommand,
+        client: new AnthropicBatchClient(),
+      });
+      if (reports.length === 0) {
+        console.log("Pru worked the queue: nothing reached a terminal state.");
+        return;
+      }
+      let bad = 0;
+      for (const r of reports) {
+        console.log(`--- ${r.job_id}: ${r.status} ---`);
+        console.log(r.markdown);
+        if (r.status !== "done") bad += 1;
+      }
+      if (bad > 0) process.exitCode = 1;
+      return;
+    }
+    if (opts.digest) {
+      const text = buildDigest(db, workRoot);
+      console.log(text);
+      mkdirSync(workRoot, { recursive: true });
+      const file = join(workRoot, `DIGEST-${new Date().toISOString().slice(0, 10)}.md`);
+      writeFileSync(file, text + "\n");
+      console.log(`\nSaved to ${file}.`);
+      return;
+    }
+    if (opts.publish) {
+      const res = publishNightJob(db, opts.publish, workRoot, { pr: opts.pr });
+      console.log(res.note);
+      if (!res.pushed) process.exitCode = 1;
+      return;
+    }
+    if (opts.schedule) {
+      const home = process.env.HOME ?? ".";
+      const shim = join(home, ".local", "bin", "pru");
+      const pruBin = existsSync(shim) ? [shim] : [process.execPath, Bun.main];
+      const files = scheduleGraveyard({ pruBin, testCommand: opts.testCommand, home });
+      console.log("Pru set the night ticks (2am submit, 6am settle):");
+      for (const f of files) console.log(`  ${f}`);
+      console.log("If a tick did not load, run: launchctl bootstrap gui/$(id -u) <file>.");
+      return;
+    }
+    if (opts.unschedule) {
+      const removed = unscheduleGraveyard();
+      console.log(
+        removed.length > 0 ? `Pru cleared the night ticks:\n  ${removed.join("\n  ")}` : "Pru found no night ticks.",
+      );
+      return;
+    }
+    {
       const text = task.join(" ").trim();
       if (!text) {
         const jobs = listNightJobs(db);
@@ -351,6 +469,7 @@ const graveyard = program
         taskPrompt: text,
         model: opts.model,
         estCostMicro: est.batch_micro_usd,
+        estStandardMicro: est.standard_micro_usd,
       });
       console.log(`Pru queued night job ${job.id} for ${snap.project_path} @ ${snap.base_sha.slice(0, 8)}.`);
       console.log(
@@ -361,42 +480,32 @@ const graveyard = program
         `Estimate: ${fmtUsd(est.batch_micro_usd)} at batch price vs ${fmtUsd(est.standard_micro_usd)} standard — ` +
           `about ${fmtUsd(est.saved_micro_usd)} stays in your pocket. Runs in the night window; watch with: pru graveyard.`,
       );
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exitCode = 1;
-    } finally {
-      db.close();
     }
-  });
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exitCode = 1;
+  } finally {
+    db.close();
+  }
+}
 
-graveyard
-  .command("run")
-  .description("Work the queue: submit due jobs, settle submitted ones.")
-  .option("--test-command <cmd>", "verification run on base AND night branch", "npm test --silent")
-  .option("--work-root <dir>", "where night workdirs live")
-  .action(async (opts: { testCommand: string; workRoot?: string }) => {
+program
+  .command("tallies")
+  .description("What Pru saved you.")
+  .action(() => {
     const db = openLedger();
     try {
-      const workRoot = opts.workRoot ?? join(process.env.HOME ?? ".", ".prudence", "night");
-      const reports = await runDueJobs(db, {
-        workRoot,
-        testCommand: opts.testCommand,
-        client: new AnthropicBatchClient(),
-      });
-      if (reports.length === 0) {
-        console.log("Pru worked the queue: nothing reached a terminal state.");
+      const totals = tallyTotals(db);
+      if (totals.length === 0) {
+        console.log("Pru has set nothing aside yet.");
         return;
       }
-      let bad = 0;
-      for (const r of reports) {
-        console.log(`--- ${r.job_id}: ${r.status} ---`);
-        console.log(r.markdown);
-        if (r.status !== "done") bad += 1;
+      for (const t of totals) {
+        console.log(`${t.kind}: ${fmtUsd(t.total_micro_usd)} across ${t.n} ${t.n === 1 ? "entry" : "entries"}`);
       }
-      if (bad > 0) process.exitCode = 1;
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exitCode = 1;
+      for (const r of recentTallies(db, 5)) {
+        console.log(`  #${r.id} ${r.kind} ${fmtUsd(r.amount_micro_usd)} — ${r.detail ?? ""}`);
+      }
     } finally {
       db.close();
     }
