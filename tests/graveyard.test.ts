@@ -11,7 +11,7 @@ import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../s
 import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
 import { runDueJobs } from "../src/graveyard/runner";
 import { publishNightJob } from "../src/graveyard/publish";
-import { agentLabel, graveyardPlist, scheduleGraveyard, unscheduleGraveyard } from "../src/graveyard/schedule";
+import { agentLabel, graveyardPlist, scheduleGraveyard, unscheduleGraveyard, nextWakeDates, fmtPmset } from "../src/graveyard/schedule";
 import { buildDigest } from "../src/graveyard/digest";
 import { listNightJobs, openLedger, queueNightJob, tallyTotals } from "../src/ledger/db";
 
@@ -522,5 +522,16 @@ describe("scheduler plists", () => {
     } finally {
       cleanup(home);
     }
+  });
+
+  test("wakes land five minutes before each tick, rolling to tomorrow", () => {
+    const evening = new Date(2026, 8, 11, 20, 0, 0);
+    const { twoAmTick, sixAmTick } = nextWakeDates(evening);
+    expect(fmtPmset(twoAmTick)).toBe("09/12/26 01:55:00");
+    expect(fmtPmset(sixAmTick)).toBe("09/12/26 05:55:00");
+    const pastThree = new Date(2026, 8, 12, 3, 0, 0);
+    const rolled = nextWakeDates(pastThree);
+    expect(fmtPmset(rolled.twoAmTick)).toBe("09/13/26 01:55:00");
+    expect(fmtPmset(rolled.sixAmTick)).toBe("09/12/26 05:55:00");
   });
 });

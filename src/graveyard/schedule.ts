@@ -54,6 +54,46 @@ export function agentsDir(home = process.env.HOME ?? "."): string {
   return join(home, "Library", "LaunchAgents");
 }
 
+// Power wakes for closed lids: launchd ticks never fire while the Mac
+// sleeps, and missed StartCalendarInterval ticks are skipped, not
+// backfilled. So each tick gets a wake five minutes earlier. One-shot
+// dates (pmset has no recurrence) — re-armed on every --schedule.
+export function nextWakeDates(now = new Date()): { twoAmTick: Date; sixAmTick: Date } {
+  const at = (base: Date, h: number, m: number): Date => {
+    const d = new Date(base);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  let wake2 = at(now, 1, 55);
+  if (wake2.getTime() <= now.getTime()) wake2 = at(new Date(now.getTime() + 86_400_000), 1, 55);
+  let wake6 = at(now, 5, 55);
+  if (wake6.getTime() <= now.getTime()) wake6 = at(new Date(now.getTime() + 86_400_000), 5, 55);
+  return { twoAmTick: wake2, sixAmTick: wake6 };
+}
+
+export function fmtPmset(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())}/${String(d.getFullYear()).slice(2)} ${p(d.getHours())}:${p(d.getMinutes())}:00`;
+}
+
+// Arms both wakes via sudo pmset (root owns power schedules). Returns what
+// to print: either confirmations or the exact manual fallback lines.
+export function armWakes(now = new Date()): { armed: string[]; manual: string[] } {
+  const { twoAmTick, sixAmTick } = nextWakeDates(now);
+  const dates = [fmtPmset(twoAmTick), fmtPmset(sixAmTick)];
+  const armed: string[] = [];
+  const manual: string[] = [];
+  for (const date of dates) {
+    try {
+      execFileSync("sudo", ["pmset", "schedule", "wake", date], { stdio: "ignore" });
+      armed.push(date);
+    } catch {
+      manual.push(`sudo pmset schedule wake "${date}"`);
+    }
+  }
+  return { armed, manual };
+}
+
 export function scheduleGraveyard(opts: {
   pruBin: string[];
   testCommand: string;

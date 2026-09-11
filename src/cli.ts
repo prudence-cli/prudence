@@ -25,7 +25,7 @@ import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
 import { AnthropicBatchClient } from "./graveyard/batch_client";
 import { runDueJobs } from "./graveyard/runner";
 import { publishNightJob } from "./graveyard/publish";
-import { scheduleGraveyard, unscheduleGraveyard } from "./graveyard/schedule";
+import { scheduleGraveyard, unscheduleGraveyard, armWakes } from "./graveyard/schedule";
 import { buildDigest } from "./graveyard/digest";
 import type { Hono } from "hono";
 
@@ -429,6 +429,14 @@ async function runGraveyardAction(
       console.log("Pru set the night ticks (2am submit, 6am settle):");
       for (const f of files) console.log(`  ${f}`);
       console.log("If a tick did not load, run: launchctl bootstrap gui/$(id -u) <file>.");
+      // Closed lids sleep through launchd ticks, so arm power wakes too.
+      // Needs one sudo (root owns power schedules); charger recommended.
+      const wakes = armWakes();
+      for (const d of wakes.armed) console.log(`  Wake armed for ${d}.`);
+      if (wakes.manual.length > 0) {
+        console.log("Pru could not arm power wakes itself — run these for a closed lid:");
+        for (const line of wakes.manual) console.log(`  ${line}`);
+      }
       return;
     }
     if (opts.unschedule) {
