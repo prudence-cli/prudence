@@ -3,7 +3,7 @@
 // F3 surfaces: install, shell, pace. F3.5: compress. F4: demo.
 
 import { Command } from "commander";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -156,6 +156,29 @@ program
       added > 0
         ? `Pru allowlisted ${added} read-only wallet command(s) for the slash packs.`
         : "Pru wallet commands already allowlisted.",
+    );
+    // Slash packs ship in the repo; Claude Code reads them from
+    // ~/.claude/commands/pru/. Overwrite is the point — the repo is the
+    // source of truth, so reinstalls upgrade the packs.
+    const packsSrc = join(import.meta.dir, "..", "packs", "claude-code", "commands");
+    const packsDest = join(dir, "commands", "pru");
+    let packs = 0;
+    try {
+      mkdirSync(packsDest, { recursive: true });
+      for (const entry of readdirSync(packsSrc)) {
+        if (!entry.endsWith(".md")) continue;
+        const destName = entry.startsWith("pru-") ? `${entry.slice(4)}` : entry;
+        copyFileSync(join(packsSrc, entry), join(packsDest, destName));
+        packs += 1;
+      }
+    } catch {
+      // Packs travel with the repo checkout; an installed binary without
+      // them still routes traffic fine.
+    }
+    console.log(
+      packs > 0
+        ? `Pru synced ${packs} slash pack(s) to ~/.claude/commands/pru/.`
+        : "Pru found no slash packs to sync.",
     );
     console.log(`For Codex and OpenAI-compat tools: export OPENAI_BASE_URL=http://localhost:${port}/v1 — or run: pru shell`);
   });
