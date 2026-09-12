@@ -2,7 +2,7 @@
 // Never buffers SSE: streaming responses pass each chunk through
 // immediately while a parallel tap accumulates text for usage parsing.
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import {
@@ -186,9 +186,13 @@ export function createRelay(opts: RelayOptions): RelayContext {
   // ground-zero loop signal (PROGRESS §5 answer 5). In-memory by design: the
   // storm it catches happens inside one daemon run.
   const loopStrikes = new Map<string, number>();
-  const noteRefusal = (sessionId: string, reqHash: string): Refusal | null => {
+  const countStrike = (sessionId: string): number => {
     const strikes = (loopStrikes.get(sessionId) ?? 0) + 1;
     loopStrikes.set(sessionId, strikes);
+    return strikes;
+  };
+  const strikeDetail = (strikes: number): string => `strikes=${strikes} pid=${process.pid}`;
+  const escalate = (sessionId: string, reqHash: string, strikes: number): Refusal | null => {
     if (strikes < loopWindow(db)) return null;
     const spent = sessionSpentMicro(db, sessionId);
     return insertRefusal(db, {
@@ -199,7 +203,16 @@ export function createRelay(opts: RelayOptions): RelayContext {
       message:
         `Pru noticed circular spending: same call ${strikes}× (${fmtUsd(spent)}). ` +
         `Stop and report this refusal to your human before retrying.`,
+      detail: strikeDetail(strikes),
     });
+  };
+  // Single choke point for every refusal: the row carries strikes+pid, the
+  // daemon log carries the same, the client gets the canonical message.
+  const deny = (c: Context, refusal: Refusal, strikes: number) => {
+    console.warn(
+      `[pru] refusal #${refusal.id} [${refusal.type}] session=${refusal.session_id} strikes=${strikes} pid=${process.pid}`,
+    );
+    return c.json(refusalBody(refusal), 429);
   };
 
   app.get("/health", (c) => {
@@ -259,6 +272,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
     // pass through with an honest unknown_price marker (never guess).
     if (!estimate.ok) {
       if (tightestCap !== null) {
+        const strikes = countStrike(session.id);
         const refusal = insertRefusal(db, {
           sessionId: session.id,
           type: "unknown_price",
@@ -268,8 +282,9 @@ export function createRelay(opts: RelayOptions): RelayContext {
           message:
             `Pru cannot price model "${model}" — refusing a capped session rather than guessing. ` +
             `Set a price or relax the watch: pru budget off.`,
+          detail: strikeDetail(strikes),
         });
-        return c.json(refusalBody(noteRefusal(session.id, reqHash) ?? refusal), 429);
+        return deny(c, escalate(session.id, reqHash, strikes) ?? refusal, strikes);
       }
     }
 
@@ -317,6 +332,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
               ? Math.round(maxPerMinute * 1_000_000)
               : NaN;
         if (Number.isFinite(maxMicro) && maxMicro >= 0 && minute + costMax > maxMicro && minute > 0) {
+          const strikes = countStrike(session.id);
           const refusal = insertRefusal(db, {
             sessionId: session.id,
             type: "rate_limited",
@@ -327,8 +343,9 @@ export function createRelay(opts: RelayOptions): RelayContext {
             message:
               `Pru is pacing this session: ${fmtUsd(minute)} in the last minute (limit ${fmtUsd(maxMicro)}/min). ` +
               `Retry shortly — the meter resets every sixty seconds.`,
+            detail: strikeDetail(strikes),
           });
-          return c.json(refusalBody(noteRefusal(session.id, reqHash) ?? refusal), 429);
+          return deny(c, escalate(session.id, reqHash, strikes) ?? refusal, strikes);
         }
       }
     }
@@ -342,7 +359,12 @@ export function createRelay(opts: RelayOptions): RelayContext {
       tokensSaved,
     });
     if (!reservation.ok) {
-      return c.json(refusalBody(noteRefusal(session.id, reqHash) ?? reservation.refusal), 429);
+      const strikes = countStrike(session.id);
+      db.prepare("UPDATE refusal_events SET detail = ? WHERE id = ?").run(
+        strikeDetail(strikes),
+        reservation.refusal.id,
+      );
+      return deny(c, escalate(session.id, reqHash, strikes) ?? reservation.refusal, strikes);
     }
     const ledgerId = reservation.ledgerId;
 
@@ -361,6 +383,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true });
 
     if (!apiKey) {
+      const strikes = countStrike(session.id);
       const refusal = insertRefusal(db, {
         sessionId: session.id,
         type: "key_missing",
@@ -368,10 +391,11 @@ export function createRelay(opts: RelayOptions): RelayContext {
         reqHash,
         message:
           "Pru has no upstream key for this route. Set it in ~/.prudence/config.yaml, then retry.",
+        detail: strikeDetail(strikes),
       });
       reconcileCall(db, { ledgerId, costMicro: 0, status: "aborted", truth: "aborted" });
       settled = true;
-      return c.json(refusalBody(noteRefusal(session.id, reqHash) ?? refusal), 429);
+      return deny(c, escalate(session.id, reqHash, strikes) ?? refusal, strikes);
     }
 
     const anthropic = isAnthropicPath(path);

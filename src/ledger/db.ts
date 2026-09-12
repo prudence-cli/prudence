@@ -156,6 +156,7 @@ export type Refusal = {
   cap_micro_usd: number | null;
   call_estimate_micro_usd: number | null;
   message: string;
+  detail?: string | null;
 };
 
 export function reserveCall(
@@ -167,6 +168,7 @@ export function reserveCall(
     costMaxMicro: number;
     reqHash: string;
     tokensSaved?: number;
+    detail?: string | null;
   },
 ): { ok: true; ledgerId: string } | { ok: false; refusal: Refusal } {
   const txn = db.transaction(() => {
@@ -179,9 +181,9 @@ export function reserveCall(
           `Resume with: pru budget set 10 — or relax the watch: pru budget off.`;
         const res = db
           .prepare(
-            "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, req_hash, message, created_at) VALUES (?, 'budget_exhausted', ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, req_hash, message, detail, created_at) VALUES (?, 'budget_exhausted', ?, ?, ?, ?, ?, ?, ?)",
           )
-          .run(input.session.id, spent, cap.limit_micro_usd, input.costMaxMicro, input.reqHash, message, Date.now());
+          .run(input.session.id, spent, cap.limit_micro_usd, input.costMaxMicro, input.reqHash, message, input.detail ?? null, Date.now());
         const refusal: Refusal = {
           id: Number(res.lastInsertRowid),
           session_id: input.session.id,
@@ -190,6 +192,7 @@ export function reserveCall(
           cap_micro_usd: cap.limit_micro_usd,
           call_estimate_micro_usd: input.costMaxMicro,
           message,
+          detail: input.detail ?? null,
         };
         return { ok: false as const, refusal };
       }
@@ -286,11 +289,12 @@ export function insertRefusal(
     callEstimateMicro?: number | null;
     reqHash?: string | null;
     message: string;
+    detail?: string | null;
   },
 ): Refusal {
   const res = db
     .prepare(
-      "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, req_hash, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, req_hash, message, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       input.sessionId,
@@ -300,6 +304,7 @@ export function insertRefusal(
       input.callEstimateMicro ?? null,
       input.reqHash ?? null,
       input.message,
+      input.detail ?? null,
       Date.now(),
     );
   return {
@@ -310,6 +315,7 @@ export function insertRefusal(
     cap_micro_usd: input.capMicro ?? null,
     call_estimate_micro_usd: input.callEstimateMicro ?? null,
     message: input.message,
+    detail: input.detail ?? null,
   };
 }
 

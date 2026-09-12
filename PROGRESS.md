@@ -214,6 +214,20 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
   replacement, both providers). `docs/coverage.md` updated.
 - Lesson: transparent-by-default includes headers, not just bodies.
 
+### Strike instrumentation (2026-09-11, alternation follow-up)
+
+- Live rows alternated `budget_exhausted`/`loop_blocked` at strikes
+  15–17, which a single counter + constant window cannot produce (the
+  serial thrash test escalates monotonically, green). Cause unknown —
+  concurrent background tasks resetting strikes is the live condition
+  tests don't replicate, but it doesn't cleanly fit either.
+- Response: `006_refusal_detail.sql` (`detail` column); every refusal
+  row now carries `strikes=N pid=P`; single `deny()` choke point logs
+  the same to daemon stdout; canonical client messages unchanged.
+  Covered by a diagnostics test (6 rows, exact strike sequences).
+- Next: reproduce on the Air with `pru budget set 0.01` + retry storm,
+  read strikes/pids off the rows.
+
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**

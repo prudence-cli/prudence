@@ -95,8 +95,7 @@ describe("retry storm (F0 shape)", () => {
   });
 });
 
-describe("guard reset", () => {
-  test("a posted call clears the strike count", async () => {
+describe("guard reset", () => {  test("a posted call clears the strike count", async () => {
     const db = openLedger(":memory:");
     const { fetchImpl } = stubUpstream();
     const { app } = createRelay({
@@ -192,5 +191,46 @@ describe("in-harness packs (thin glue)", () => {
     );
     expect(snippet).toContain("read-only");
     expect(snippet).toContain("STOP");
+  });
+});
+
+describe("refusal diagnostics (alternation follow-up)", () => {
+  test("every refusal row carries its strike count and daemon pid", async () => {
+    const db = openLedger(":memory:");
+    const { fetchImpl } = stubUpstream();
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.anthropic.com",
+      upstreamApiKey: "sk-test",
+      fetchImpl,
+    });
+    setCap(db, "global", "*", usdToMicro(0.005));
+    const first = await post(app, requestFixture());
+    expect(first.status).toBe(200); // one reservation fits; its ok resets strikes
+    await first.text();
+    for (let i = 0; i < 4; i++) {
+      const res = await post(app, requestFixture());
+      expect(res.status).toBe(429);
+      await res.text();
+    }
+    const rows = db.query(
+      "SELECT type, detail FROM refusal_events ORDER BY id",
+    ).all() as { type: string; detail: string }[];
+    // 4 breach rows (strikes 1-4) + 2 loop rows (strikes 3-4): every row
+    // explains itself, so a live alternation mystery reads off the books.
+    expect(rows).toHaveLength(6);
+    for (const r of rows) {
+      expect(r.detail).toMatch(/^strikes=\d+ pid=\d+$/);
+    }
+    const budgets = rows.filter((r) => r.type === "budget_exhausted").map((r) => r.detail);
+    expect(budgets).toEqual([
+      `strikes=1 pid=${process.pid}`,
+      `strikes=2 pid=${process.pid}`,
+      `strikes=3 pid=${process.pid}`,
+      `strikes=4 pid=${process.pid}`,
+    ]);
+    const loops = rows.filter((r) => r.type === "loop_blocked").map((r) => r.detail);
+    expect(loops).toEqual([`strikes=3 pid=${process.pid}`, `strikes=4 pid=${process.pid}`]);
+    db.close();
   });
 });
