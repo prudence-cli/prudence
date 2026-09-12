@@ -3,6 +3,8 @@
 // (voice: calm bookkeeper), and ALL ornament gates behind isTTY — piped
 // output (slash packs, scripts, tests) stays plain and token-cheap.
 
+import { CROW_SHADED } from "./crow-shaded";
+
 const TTY = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR?.length && process.env.TERM !== "dumb";
 
 export const isTTY = TTY;
@@ -23,18 +25,9 @@ export const bold = (t: string): string => paint(BOLD, t);
 // Pru, perched and chubby. Monochrome geometry — reads at any width.
 export const CROW = ["    ___", "   / o o \\", "  |   ▾   |", "   \\ ___ /", "    _| |_"].join("\n");
 
-// Pru grand: side profile on the ledger line. Reserved for moments that
-// deserve it (the demo intro) — everyday commands keep the compact mark.
-export const CROW_GRAND = [
-  "                          ____",
-  "                         /    \\__",
-  "                        |  o     \\",
-  "                        |   >_    |",
-  "                         \\   ____/",
-  "                          \\_/",
-  "                           ||",
-  "     ______________________||______________________",
-].join("\n");
+// Pru grand: the shaded bird. Reserved for moments that deserve it (the
+// demo intro) — everyday commands keep the compact mark.
+export const CROW_GRAND = CROW_SHADED;
 
 export function crowGrandLine(): string {
   if (!TTY) return "";
