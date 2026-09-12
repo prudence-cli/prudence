@@ -16,7 +16,10 @@ bun install --cwd "${REPO_DIR}"
 
 echo "Pru: linking ~/.local/bin/pru..."
 mkdir -p "${BIN_DIR}"
-printf '#!/bin/sh\nexec bun "%s/src/cli.ts" "$@"\n' "${REPO_DIR}" > "${BIN_DIR}/pru"
+# Absolute bun path: launchd/cron run with a minimal PATH where bare `bun`
+# does not resolve (live-fire lesson: both night ticks died on line 2).
+BUN_BIN="$(command -v bun)"
+printf '#!/bin/sh\nexec "%s" "%s/src/cli.ts" "$@"\n' "${BUN_BIN}" "${REPO_DIR}" > "${BIN_DIR}/pru"
 chmod +x "${BIN_DIR}/pru"
 
 echo "Pru: pointing Claude Code at the daemon..."
