@@ -22,9 +22,8 @@ export const copper = (t: string): string => paint(COPPER, t);
 export const dim = (t: string): string => paint(DIM, t);
 export const bold = (t: string): string => paint(BOLD, t);
 
-// Pru, perched and chubby — a pair, contributed. Monochrome, four lines,
-// reads at any width. The everyday mark.
-export const CROW = ["___     ___", "  (o o)   (o o)", " (  V  ) (  V  )", "/--m-m- /--m-m-"].join("\n");
+// Pru, perched and chubby — contributed, single bird, centers aligned.
+export const CROW = ["  ___", " (o o)", "(  V  )", "/--m-m-"].join("\n");
 
 // Pru grand: the shaded bird. Reserved for moments that deserve it (the
 // demo intro) — everyday commands keep the compact mark.
