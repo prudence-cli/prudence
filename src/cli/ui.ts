@@ -20,8 +20,8 @@ export const copper = (t: string): string => paint(COPPER, t);
 export const dim = (t: string): string => paint(DIM, t);
 export const bold = (t: string): string => paint(BOLD, t);
 
-// Pru, perched. Monochrome geometry — reads at any width, costs 4 lines.
-export const CROW = ["  ,", " (o)>", " /|\\ ", " ─╨─ "].join("\n");
+// Pru, perched and chubby. Monochrome geometry — reads at any width.
+export const CROW = ["    ___", "   / o o \\", "  |   ▾   |", "   \\ ___ /", "    _| |_"].join("\n");
 
 export function crowLine(): string {
   if (!TTY) return "";

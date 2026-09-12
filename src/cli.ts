@@ -9,6 +9,7 @@ import { join } from "node:path";
 import {
   clearCap,
   fmtUsd,
+  getCap,
   getStatus,
   listNightJobs,
   openLedger,
@@ -50,9 +51,16 @@ budget
     }
     const db = openLedger();
     setCap(db, opts.scope, opts.key, usdToMicro(value));
+    const cap = getCap(db, opts.scope, opts.key);
     db.close();
     console.log(`Pru is watching: ${fmtUsd(usdToMicro(value))} cap armed on ${opts.scope}:${opts.key}.`);
-    if (isTTY) console.log(`${coinBar(0, usdToMicro(value))} ${bold(fmtUsd(0))} of ${fmtUsd(usdToMicro(value))} spent.`);
+    // The confirmation reads the row back: re-arming never clears spend,
+    // and the bar must say so.
+    if (isTTY && cap) {
+      console.log(
+        `${coinBar(cap.spent_micro_usd, cap.limit_micro_usd)} ${bold(fmtUsd(cap.spent_micro_usd))} of ${fmtUsd(cap.limit_micro_usd)} spent.`,
+      );
+    }
   });
 
 budget

@@ -339,6 +339,12 @@ export function clearCap(db: Database, scope: string, scopeKey: string): boolean
   return res.changes > 0;
 }
 
+export function getCap(db: Database, scope: string, scopeKey: string): CapRow | null {
+  return db
+    .query("SELECT * FROM cap_state WHERE scope = ? AND scope_key = ?")
+    .get(scope, scopeKey) as CapRow | null;
+}
+
 export type StatusView = {
   session: SessionRow;
   caps: CapRow[];

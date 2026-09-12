@@ -248,6 +248,10 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
   token-cheap), voice-safe (no emoji, no error-path decoration).
   Wired into `status` (crow + bars), `budget set` (opening bar),
   `demo` (crow acts + replay spinner), `graveyard --run` (wait spinner).
+- Live-fire follow-up: `budget set` confirmation hardcoded `$0.00`
+  (spend never cleared — `setCap` only moves the limit — but the line
+  lied). Now reads the row back via `getCap`; regression test pins
+  spend across re-arms. Crow chubbied by owner request.
 
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;

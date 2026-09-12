@@ -4,7 +4,7 @@ import { coinBar, crowLine, CROW } from "../src/cli/ui";
 
 describe("terminal character", () => {
   test("crow exists and stays home off-TTY", () => {
-    expect(CROW).toContain("(o)>");
+    expect(CROW).toContain("o o");
     expect(process.stdout.isTTY ?? false).toBe(false);
     expect(crowLine()).toBe("");
   });

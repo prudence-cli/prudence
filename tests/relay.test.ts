@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { createRelay, type FetchLike } from "../src/relay/server";
 import {
   fmtUsd,
+  getCap,
   getStatus,
   openLedger,
   setCap,
@@ -56,6 +57,7 @@ async function post(app: Hono, body: unknown, signal?: AbortSignal) {
 }
 
 describe("money math (integer micro-USD)", () => {
+
   test("round-trips through usdToMicro", () => {
     expect(usdToMicro(5)).toBe(5_000_000);
     expect(usdToMicro(0.1)).toBe(100_000);
@@ -394,6 +396,30 @@ describe("upstream headers (live-fire hotfix)", () => {
     await res.text();
     expect(seen["authorization"]).toBe("Bearer sk-pru");
     expect(seen["openai-beta"]).toBe("assistants=v2");
+    db.close();
+  });
+});
+
+describe("cap re-arming (live-fire follow-up)", () => {
+  test("changing the limit never clears posted spend", async () => {
+    const db = openLedger(":memory:");
+    const { fetchImpl } = jsonUpstream();
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.anthropic.com",
+      upstreamApiKey: "sk-test",
+      fetchImpl,
+    });
+    setCap(db, "global", "*", usdToMicro(10));
+    const res = await post(app, requestFixture());
+    expect(res.status).toBe(200);
+    await res.text();
+    expect(getCap(db, "global", "*")?.spent_micro_usd).toBe(1800);
+    // Re-arm twice: limits move, spend stands still.
+    setCap(db, "global", "*", usdToMicro(4));
+    expect(getCap(db, "global", "*")).toMatchObject({ limit_micro_usd: 4_000_000, spent_micro_usd: 1800 });
+    setCap(db, "global", "*", usdToMicro(5));
+    expect(getCap(db, "global", "*")).toMatchObject({ limit_micro_usd: 5_000_000, spent_micro_usd: 1800 });
     db.close();
   });
 });
