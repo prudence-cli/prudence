@@ -20,6 +20,7 @@ import {
   usdToMicro,
 } from "./ledger/db";
 import { createRelay, type FetchLike } from "./relay/server";
+import { bold, coinBar, crowLine, isTTY, sleep, spinner } from "./cli/ui";
 import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
 import { AnthropicBatchClient } from "./graveyard/batch_client";
@@ -51,6 +52,7 @@ budget
     setCap(db, opts.scope, opts.key, usdToMicro(value));
     db.close();
     console.log(`Pru is watching: ${fmtUsd(usdToMicro(value))} cap armed on ${opts.scope}:${opts.key}.`);
+    if (isTTY) console.log(`${coinBar(0, usdToMicro(value))} ${bold(fmtUsd(0))} of ${fmtUsd(usdToMicro(value))} spent.`);
   });
 
 budget
@@ -80,15 +82,16 @@ program
       `Calls on the books: ${view.calls}, posted spend: ${fmtUsd(view.spent_micro_usd)}`,
     ];
     for (const cap of view.caps) {
-      lines.push(
+      const base =
         `Cap ${cap.scope}:${cap.scope_key}: ${fmtUsd(cap.spent_micro_usd)} spent of ${fmtUsd(cap.limit_micro_usd)}` +
-          (cap.reserved_micro_usd > 0 ? ` (${fmtUsd(cap.reserved_micro_usd)} reserved in flight)` : ""),
-      );
+        (cap.reserved_micro_usd > 0 ? ` (${fmtUsd(cap.reserved_micro_usd)} reserved in flight)` : "");
+      lines.push(isTTY ? `${coinBar(cap.spent_micro_usd, cap.limit_micro_usd)} ${base}` : base);
     }
     for (const r of view.refusals) {
       lines.push(`Refusal #${r.id} [${r.type}]: ${r.message}`);
     }
-    console.log(lines.join("\n"));
+    const head = crowLine();
+    console.log(head ? head + lines.join("\n") : lines.join("\n"));
   });
 
 program
@@ -328,18 +331,25 @@ program
     const dbA = join(tmpdir(), `pru-demo-${Date.now()}-a.db`);
     const dbB = join(tmpdir(), `pru-demo-${Date.now()}-b.db`);
     try {
+      const head = crowLine();
+      if (head) process.stdout.write(head);
       console.log("Pru demo: a $0.01 session against a stub upstream.");
+      if (isTTY) await sleep(250);
       const first = await runTape(dbA);
       const spent = first.books.length;
       console.log(`Fake spend: ${spent} calls posted before the books closed.`);
+      if (isTTY) await sleep(250);
       const refusal = first.refusals[0];
       console.log(`Loud refusal [${refusal.type}]: ${refusal.message}`);
       const loop = first.refusals.find((r) => r.type === "loop_blocked");
       if (loop) console.log(`Storm guard [loop_blocked]: ${loop.message}`);
+      if (isTTY) await sleep(250);
+      const spin = spinner("replaying the tape");
       const second = await runTape(dbB);
       const match =
         JSON.stringify(first.books) === JSON.stringify(second.books) &&
         JSON.stringify(first.refusals) === JSON.stringify(second.refusals);
+      spin.stop(match ? "ledgers match" : "LEDGERS DIFFER");
       console.log(match ? "Replay verify: ledgers match." : "Replay verify: LEDGERS DIFFER.");
       const total = (second.books as { cost_micro_usd: number }[]).reduce(
         (s, r) => s + r.cost_micro_usd,
@@ -411,11 +421,13 @@ async function runGraveyardAction(
   const workRoot = opts.workRoot ?? join(process.env.HOME ?? ".", ".prudence", "night");
   try {
     if (opts.run) {
+      const spin = spinner("working the night queue");
       const reports = await runDueJobs(db, {
         workRoot,
         testCommand: opts.testCommand,
         client: new AnthropicBatchClient(),
       });
+      spin.stop(`${reports.length} job(s) terminal`);
       if (reports.length === 0) {
         console.log("Pru worked the queue: nothing reached a terminal state.");
         return;

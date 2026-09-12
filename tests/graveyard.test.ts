@@ -1,7 +1,7 @@
 // N1 acceptance: real repo → valid batch payload, dry-run queue.
 // Repos are throwaway tmp dirs. No network, no Batch API submission (N2).
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -37,6 +37,17 @@ function makeRepo(files: Record<string, string>): string {
 const cleanup = (dir: string) => rmSync(dir, { recursive: true, force: true });
 
 describe("snapshotter", () => {
+  test("bundles persist under ~/.prudence, not temp", () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    try {
+      const snap = snapshotRepo(dir);
+      expect(snap.bundle_path.startsWith(join(fakeHome, ".prudence", "night", "bundles"))).toBe(true);
+      expect(existsSync(snap.bundle_path)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("freezes base sha, bundle, and text files", () => {
     const dir = makeRepo({
       "src/a.ts": "export const a = 1;\n",
@@ -214,6 +225,19 @@ function mkWorkRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), "pru-n2-work-"));
   return dir;
 }
+
+// Snapshots default under ~/.prudence — point HOME at scratch so tests
+// never touch the real books.
+const REAL_HOME = process.env.HOME;
+let fakeHome = "";
+beforeEach(() => {
+  fakeHome = mkdtempSync(join(tmpdir(), "pru-home-"));
+  process.env.HOME = fakeHome;
+});
+afterEach(() => {
+  process.env.HOME = REAL_HOME;
+  rmSync(fakeHome, { recursive: true, force: true });
+});
 
 describe("night runner (mock batch)", () => {
   test("improvement: base fails, branch passes, committed with report", async () => {

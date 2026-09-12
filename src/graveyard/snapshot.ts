@@ -3,7 +3,6 @@
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -70,11 +69,24 @@ export function readTextFiles(cwd: string): { files: SnapshotFile[]; total_chars
   return { files, total_chars: total, truncated };
 }
 
-export function snapshotRepo(projectPath: string, jobId?: string): Snapshot {
+export function defaultBundlesDir(): string {
+  return join(process.env.HOME ?? ".", ".prudence", "night", "bundles");
+}
+
+export function snapshotRepo(
+  projectPath: string,
+  jobId?: string,
+  bundleDir?: string,
+): Snapshot {
   const cwd = projectPath;
   const baseSha = git(cwd, "rev-parse", "HEAD");
   const id = jobId ?? randomUUID().replace(/-/g, "").slice(0, 12);
-  const bundlePath = join(tmpdir(), `pru-graveyard-${id}.bundle`);
+  // Bundles persist under ~/.prudence/night/bundles by default: the system
+  // temp dir may be cleaned on reboot, vaporizing the bundle between
+  // queueing and the 2am submit. Callers (tests) may pass a scratch dir.
+  const dir = bundleDir ?? defaultBundlesDir();
+  mkdirSync(dir, { recursive: true });
+  const bundlePath = join(dir, `pru-graveyard-${id}.bundle`);
   git(cwd, "bundle", "create", bundlePath, "HEAD");
 
   const { files, total_chars: total, truncated } = readTextFiles(cwd);

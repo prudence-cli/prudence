@@ -238,6 +238,17 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 - Escalation was correct all along. The `detail` column and `deny()`
   logging stay — they turned a ghost into a five-minute read.
 
+### Night durability + terminal character (2026-09-11, pre-dogfood)
+
+- Bundles persist under `~/.prudence/night/bundles/` (new default;
+  caller-overridable, tests hermetic via fake HOME). Temp-dir bundles
+  could not survive a reboot between queueing and 2am.
+- `src/cli/ui.ts`: perched-crow mark, copper coin bars, braille
+  spinner. All ornament TTY-gated (packs/pipes stay plain and
+  token-cheap), voice-safe (no emoji, no error-path decoration).
+  Wired into `status` (crow + bars), `budget set` (opening bar),
+  `demo` (crow acts + replay spinner), `graveyard --run` (wait spinner).
+
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
