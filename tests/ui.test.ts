@@ -5,8 +5,9 @@ import { coinBar, crowGrandLine, crowLine, CROW, CROW_GRAND } from "../src/cli/u
 describe("terminal character", () => {
   test("crow exists and stays home off-TTY", () => {
     expect(CROW).toContain("o o");
-    expect(CROW_GRAND).toContain("████");
+    expect(CROW_GRAND).toContain("●████");
     expect(CROW_GRAND.split("\n").length).toBeGreaterThan(20);
+    expect(CROW_GRAND).not.toContain("DotArtCopy");
     expect(process.stdout.isTTY ?? false).toBe(false);
     expect(crowLine()).toBe("");
     expect(crowGrandLine()).toBe("");
