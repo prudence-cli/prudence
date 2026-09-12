@@ -1,12 +1,14 @@
 // UI ornament contract: plain off-TTY (packs, pipes, tests), dressed on TTY.
 import { describe, expect, test } from "bun:test";
-import { coinBar, crowLine, CROW } from "../src/cli/ui";
+import { coinBar, crowGrandLine, crowLine, CROW, CROW_GRAND } from "../src/cli/ui";
 
 describe("terminal character", () => {
   test("crow exists and stays home off-TTY", () => {
     expect(CROW).toContain("o o");
+    expect(CROW_GRAND).toContain(">_");
     expect(process.stdout.isTTY ?? false).toBe(false);
     expect(crowLine()).toBe("");
+    expect(crowGrandLine()).toBe("");
   });
 
   test("coin bar is exact figures plus ornament, never emoji", () => {

@@ -21,7 +21,7 @@ import {
   usdToMicro,
 } from "./ledger/db";
 import { createRelay, type FetchLike } from "./relay/server";
-import { bold, coinBar, crowLine, isTTY, sleep, spinner } from "./cli/ui";
+import { bold, coinBar, crowGrandLine, crowLine, isTTY, sleep, spinner } from "./cli/ui";
 import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
 import { AnthropicBatchClient } from "./graveyard/batch_client";
@@ -339,7 +339,7 @@ program
     const dbA = join(tmpdir(), `pru-demo-${Date.now()}-a.db`);
     const dbB = join(tmpdir(), `pru-demo-${Date.now()}-b.db`);
     try {
-      const head = crowLine();
+      const head = crowGrandLine();
       if (head) process.stdout.write(head);
       console.log("Pru demo: a $0.01 session against a stub upstream.");
       if (isTTY) await sleep(250);

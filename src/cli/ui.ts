@@ -23,6 +23,24 @@ export const bold = (t: string): string => paint(BOLD, t);
 // Pru, perched and chubby. Monochrome geometry — reads at any width.
 export const CROW = ["    ___", "   / o o \\", "  |   ▾   |", "   \\ ___ /", "    _| |_"].join("\n");
 
+// Pru grand: side profile on the ledger line. Reserved for moments that
+// deserve it (the demo intro) — everyday commands keep the compact mark.
+export const CROW_GRAND = [
+  "                          ____",
+  "                         /    \\__",
+  "                        |  o     \\",
+  "                        |   >_    |",
+  "                         \\   ____/",
+  "                          \\_/",
+  "                           ||",
+  "     ______________________||______________________",
+].join("\n");
+
+export function crowGrandLine(): string {
+  if (!TTY) return "";
+  return `${CROW_GRAND}\n${copper("Pru")} ${dim("— the books are open.")}\n`;
+}
+
 export function crowLine(): string {
   if (!TTY) return "";
   return `${CROW}\n${copper("Pru")} ${dim("— the books are open.")}\n`;
