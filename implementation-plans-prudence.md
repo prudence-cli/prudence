@@ -484,7 +484,46 @@ flowchart TB
     N1 --> N2[N2: Batch client + safety net · 2]
     N2 --> N3[N3: Report + auto-PR · 1]
     N3 --> N4[💰 GRAVEYARD SHIFT LAUNCH]
+    N4 --> K1[K1: System keychain<br/>instead of env vars · 1]
+    K1 --> P1[P1: Subscription<br/>passthrough mode · 2]
 ```
+
+**Gated rule:** K1/P1 start only after the live dogfood lands (N4
+evidence: one unassisted overnight with receipts). No new tracks before
+then — polish only on dogfood evidence.
+
+---
+
+## 8. Post-dogfood trust track (locked 2026-09-11)
+
+Users should never have to handle raw keys, and subscribers should get
+Meter Watch without keys at all. Two phases, in order:
+
+### K1 — System keychain instead of env vars
+
+- `pru setup` prompts once (native dialog, Touch ID-gated), stores via
+  `security`, daemon reads at boot. Kills history lines, `launchctl
+  setenv` with visible values, and env snooping.
+- The secret lives in exactly one OS-guarded place; logs, DB, and error
+  bodies never contain it (canary test proves the negative).
+- Acceptance: fresh machine, no key in env anywhere → full relay +
+  night pipeline green; `grep -ri sk-ant` across repo, DB, and logs
+  finds nothing but the test canary's absence assertion.
+
+### P1 — Subscription passthrough mode
+
+- Spec: `docs/subscription-passthrough.md` (explicit per-upstream
+  opt-in, verbatim `Authorization` forwarding, caps in
+  `calls | input_tokens | usd`, two new canonical strings, Graveyard
+  refuses subscription sessions at queue time).
+- Acceptance: §7 of that spec, all five green, plus a live Pro-account
+  session booking token-unit spend with dollars honestly NULL.
+
+### Explicitly not in this track
+
+- `pru login` (Pru performing OAuth itself) — fragile, scary story.
+- Hosted key custody — ends the BYOK moat. Never without an
+  owner-level re-decision logged here.
 
 ---
 

@@ -199,6 +199,10 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 > (median $ saved/night).
 >
 > Until then: no new tracks. Polish only on dogfood evidence.
+>
+> Sequenced after the dogfood lands (plan §8, locked): **K1 system
+> keychain instead of env vars**, then **P1 subscription passthrough**
+> (spec: `docs/subscription-passthrough.md`). Owner-directed 2026-09-11.
 
 ### Hotfix log (2026-09-11, live fire from the MacBook Air)
 
