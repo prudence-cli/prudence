@@ -228,6 +228,16 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 - Next: reproduce on the Air with `pru budget set 0.01` + retry storm,
   read strikes/pids off the rows.
 
+### Alternation post-mortem (2026-09-11, resolved — no bug)
+
+- The instrumentation convicted the *reading*, not the code. Live rows
+  pair per request (`#93 budget s11` + `#94 loop s11`, one `deny()` line
+  each, single pid, strikes 1→11 monotonic): every refused request past
+  threshold books breach-then-escalation and returns the loop message.
+  Yesterday's alternation was a `LIMIT 5` window cutting mid-pair.
+- Escalation was correct all along. The `detail` column and `deny()`
+  logging stay — they turned a ghost into a five-minute read.
+
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**
