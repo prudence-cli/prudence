@@ -257,6 +257,20 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
   lied). Now reads the row back via `getCap`; regression test pins
   spend across re-arms. Crow chubbied by owner request.
 
+### Dogfood night one post-mortem (2026-09-13, both jobs failed clean)
+
+- Ticks fired, batches submitted and settled, verdicts booked — but
+  base AND night tests failed identically: bundle clones carry no
+  `node_modules` by design, so the suite could prove nothing. The two
+  diffs were never judged; the safety net correctly refused.
+- Fixes: workdir `bun install` (absolute bun path) before base tests;
+  sane PATH (`~/.bun/bin`, homebrew) for all test children; base/night
+  output tails saved into `report.md` (a verdict without evidence is a
+  rumor); `graveyard --retry <id>` re-snapshots and requeues
+  failed/conflicted jobs. Install step injectable for offline tests.
+- Lesson: night workdirs must be self-sufficient — the bundle is
+  source, not an environment.
+
 **Standing constraints: cheapest-first; replay determinism is the
 checkpoint; Night Shift is the spine's showcase, not extra scope;
 in-harness packs are thin glue — daemon owns all truth.**

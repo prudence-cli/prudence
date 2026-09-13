@@ -64,6 +64,7 @@ report. The whole product before a real key.
 | `pru demo` | The 60-second story |
 | `pru graveyard "task"` | Queue half-price night work (exact 50% math up front) |
 | `pru graveyard --run` | Submit due jobs, settle submitted ones (safety net inside) |
+| `pru graveyard --retry <id>` | Re-snapshot and requeue a failed/conflicted job |
 | `pru graveyard --digest` | Morning receipt queue: spend, stops, savings |
 | `pru graveyard --publish <id> [--pr]` | Push a verified branch, optionally open the PR |
 | `pru graveyard --schedule` | Install 2am/6am launchd ticks (macOS) |

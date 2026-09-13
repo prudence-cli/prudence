@@ -559,6 +559,11 @@ export function updateNightJob(
     batch_id?: string | null;
     real_cost_micro_usd?: number | null;
     finished_at?: number | null;
+    repo_snapshot?: string;
+    base_sha?: string;
+    est_cost_micro_usd?: number | null;
+    est_standard_micro_usd?: number | null;
+    result_pr_url?: string | null;
   },
 ): void {
   const sets: string[] = [];
@@ -578,6 +583,26 @@ export function updateNightJob(
   if (patch.finished_at !== undefined) {
     sets.push("finished_at = ?");
     vals.push(patch.finished_at);
+  }
+  if (patch.repo_snapshot !== undefined) {
+    sets.push("repo_snapshot = ?");
+    vals.push(patch.repo_snapshot);
+  }
+  if (patch.base_sha !== undefined) {
+    sets.push("base_sha = ?");
+    vals.push(patch.base_sha);
+  }
+  if (patch.est_cost_micro_usd !== undefined) {
+    sets.push("est_cost_micro_usd = ?");
+    vals.push(patch.est_cost_micro_usd);
+  }
+  if (patch.est_standard_micro_usd !== undefined) {
+    sets.push("est_standard_micro_usd = ?");
+    vals.push(patch.est_standard_micro_usd);
+  }
+  if (patch.result_pr_url !== undefined) {
+    sets.push("result_pr_url = ?");
+    vals.push(patch.result_pr_url);
   }
   if (sets.length === 0) return;
   vals.push(id);

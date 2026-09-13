@@ -10,19 +10,23 @@ import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 import {
   fmtUsd,
+  getNightJob,
   listNightJobs,
   recordTally,
   updateNightJob,
   type NightJobRow,
 } from "../ledger/db";
-import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS } from "./diff_builder";
+import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "./diff_builder";
 import { extractDiffForJob, type BatchClient } from "./batch_client";
-import { readTextFiles } from "./snapshot";
+import { readTextFiles, snapshotRepo } from "./snapshot";
 
 export type RunOpts = {
   workRoot: string;
   testCommand: string;
   client: BatchClient;
+  // Install step, injectable for offline tests. Default shells out to the
+  // running Bun (absolute path — launchd PATH is a wasteland).
+  install?: (workdir: string) => { pass: boolean; output: string };
 };
 
 export type JobReport = {
@@ -47,6 +51,7 @@ function shPass(cwd: string, command: string): { pass: boolean; output: string }
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 120_000,
+      env: sanePathEnv(),
     });
     return { pass: true, output: String(out).slice(-2000) };
   } catch (err) {
@@ -54,6 +59,14 @@ function shPass(cwd: string, command: string): { pass: boolean; output: string }
     const output = String(e.stdout ?? e.stderr ?? err).slice(-2000);
     return { pass: false, output };
   }
+}
+
+// Launchd children inherit a wasteland PATH (no bun, no npm shims). The
+// night must not depend on interactive shell dotfiles to find its tools.
+function sanePathEnv(): Record<string, string> {
+  const home = process.env.HOME ?? "";
+  const extra = [`${home}/.bun/bin`, `${home}/.local/bin`, "/usr/local/bin", "/opt/homebrew/bin"];
+  return { ...(process.env as Record<string, string>), PATH: [...extra, process.env.PATH ?? ""].join(":") };
 }
 
 function jobDir(workRoot: string, jobId: string): string {
@@ -67,6 +80,25 @@ function cloneBundle(bundlePath: string, dest: string, baseSha: string): void {
   mkdirSync(dest, { recursive: true });
   sh(dest, "git", "clone", "-q", bundlePath, ".");
   sh(dest, "git", "checkout", "-q", baseSha);
+}
+
+// Night workdirs are clean bundle clones: no node_modules by design, so
+// the safety net would judge every diff against a broken tree. Install
+// first; a failed install fails the job with its output on record.
+export function installWorkdirDeps(workdir: string): { pass: boolean; output: string } {
+  try {
+    const out = execFileSync(process.execPath, ["install", "--cwd", workdir], {
+      cwd: workdir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+      env: sanePathEnv(),
+    });
+    return { pass: true, output: String(out).slice(-2000) };
+  } catch (err) {
+    const e = err as { stdout?: unknown; stderr?: unknown };
+    return { pass: false, output: String(e.stdout ?? e.stderr ?? err).slice(-2000) };
+  }
 }
 
 async function submitJob(db: Database, job: NightJobRow, opts: RunOpts): Promise<void> {
@@ -137,7 +169,17 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
     );
   }
 
-  // Safety net: the same command on base AND on the night branch.
+  // Dependencies first: the clone carries no node_modules by design.
+  const install = (opts.install ?? installWorkdirDeps)(work);
+  if (!install.pass) {
+    return finish(
+      db, job, dir, "failed",
+      `# Night job ${job.id} — failed\n\nTask: ${job.task_prompt}\n\nDependencies would not install, so the tests could prove nothing. Nothing committed.\n\n<details>\n<summary>install output</summary>\n\n\`\`\`\n${install.output}\n\`\`\`\n</details>`,
+    );
+  }
+
+  // Safety net: the same command on base AND on the night branch. Tails
+  // ship in the report — a verdict without evidence is a rumor.
   const base = shPass(work, opts.testCommand);
   const branch = `night/${job.id}`;
   sh(work, "git", "checkout", "-qb", branch);
@@ -157,7 +199,7 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
     return finish(
       db, job, dir, "failed",
       `# Night job ${job.id} — failed\n\nTask: ${job.task_prompt}\n\n${verdictLine} — ` +
-        `the night branch did not pass, so nothing was committed. Workdir kept for inspection.`,
+        `the night branch did not pass, so nothing was committed. Workdir kept for inspection.\n\n<details>\n<summary>base output</summary>\n\n\`\`\`\n${base.output}\n\`\`\`\n</details>\n\n<details>\n<summary>night output</summary>\n\n\`\`\`\n${night.output}\n\`\`\`\n</details>`,
     );
   }
   sh(work, "git", "add", "-A");
@@ -203,4 +245,48 @@ export async function runDueJobs(db: Database, opts: RunOpts): Promise<JobReport
     if (report.markdown) reports.push(report);
   }
   return reports;
+}
+
+// Retry a failed/conflict job against the live repo as it stands now:
+// fresh snapshot, fresh estimate, back to queued. The old bundle is
+// removed once the new one exists.
+export function retryNightJob(db: Database, jobId: string): NightJobRow {
+  const job = getNightJob(db, jobId);
+  if (!job) throw new Error(`Pru has no night job ${jobId} on the books.`);
+  if (job.status !== "failed" && job.status !== "conflict") {
+    throw new Error(`Pru only retries failed or conflicted jobs (status is ${job.status}).`);
+  }
+  const snap = snapshotRepo(job.project_path);
+  const payload = buildDiffPayload(
+    {
+      project_path: snap.project_path,
+      base_sha: snap.base_sha,
+      bundle_path: snap.bundle_path,
+      files: snap.files,
+      total_chars: snap.total_chars,
+      tokens_est: snap.tokens_est,
+      truncated: snap.truncated,
+    },
+    job.task_prompt,
+    job.model,
+  );
+  const est = estimateNightJob(payload);
+  if (!est) throw new Error(`Pru cannot price model "${job.model}" — refusing to queue a guess.`);
+  if (job.repo_snapshot !== snap.bundle_path) {
+    rmSync(job.repo_snapshot, { force: true });
+  }
+  updateNightJob(db, jobId, {
+    status: "queued",
+    batch_id: null,
+    repo_snapshot: snap.bundle_path,
+    base_sha: snap.base_sha,
+    est_cost_micro_usd: est.batch_micro_usd,
+    est_standard_micro_usd: est.standard_micro_usd,
+    real_cost_micro_usd: null,
+    result_pr_url: null,
+    finished_at: null,
+  });
+  const next = getNightJob(db, jobId);
+  if (!next) throw new Error(`Pru lost night job ${jobId} while requeueing.`);
+  return next;
 }

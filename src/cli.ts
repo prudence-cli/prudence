@@ -25,7 +25,7 @@ import { bold, coinBar, crowGrandLine, crowLine, isTTY, sleep, spinner } from ".
 import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
 import { AnthropicBatchClient } from "./graveyard/batch_client";
-import { runDueJobs } from "./graveyard/runner";
+import { retryNightJob, runDueJobs } from "./graveyard/runner";
 import { publishNightJob } from "./graveyard/publish";
 import { scheduleGraveyard, unscheduleGraveyard, armWakes } from "./graveyard/schedule";
 import { buildDigest } from "./graveyard/digest";
@@ -383,6 +383,7 @@ program
   .option("--model <model>", "model for the night run", "claude-sonnet-4-5")
   .option("--path <path>", "repo to snapshot (default: cwd)")
   .option("--run", "work the queue: submit due jobs, settle submitted ones")
+  .option("--retry <id>", "re-snapshot and requeue a failed/conflicted job")
   .option("--digest", "print the morning receipt queue")
   .option("--publish <id>", "push a verified branch to origin")
   .option("--pr", "with --publish: open the PR too (needs gh)")
@@ -397,6 +398,7 @@ program
         model: string;
         path?: string;
         run?: boolean;
+        retry?: string;
         digest?: boolean;
         publish?: string;
         pr?: boolean;
@@ -416,6 +418,7 @@ async function runGraveyardAction(
     model: string;
     path?: string;
     run?: boolean;
+    retry?: string;
     digest?: boolean;
     publish?: string;
     pr?: boolean;
@@ -428,6 +431,11 @@ async function runGraveyardAction(
   const db = openLedger();
   const workRoot = opts.workRoot ?? join(process.env.HOME ?? ".", ".prudence", "night");
   try {
+    if (opts.retry) {
+      const next = retryNightJob(db, opts.retry);
+      console.log(`Pru requeued night job ${next.id} @ ${next.base_sha.slice(0, 8)} — fresh snapshot, same task.`);
+      return;
+    }
     if (opts.run) {
       const spin = spinner("working the night queue");
       const reports = await runDueJobs(db, {

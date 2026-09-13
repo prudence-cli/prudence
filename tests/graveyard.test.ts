@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { snapshotRepo, SNAPSHOT_MAX_CHARS } from "../src/graveyard/snapshot";
 import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../src/graveyard/diff_builder";
 import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
-import { runDueJobs } from "../src/graveyard/runner";
+import { installWorkdirDeps, retryNightJob, runDueJobs } from "../src/graveyard/runner";
 import { publishNightJob } from "../src/graveyard/publish";
 import { agentLabel, graveyardPlist, scheduleGraveyard, unscheduleGraveyard, nextWakeDates, fmtPmset } from "../src/graveyard/schedule";
 import { buildDigest } from "../src/graveyard/digest";
@@ -190,6 +190,9 @@ const BROKEN_DIFF = `--- a/src/nope.ts
 +replacement
 `;
 
+// Offline seam: night tests never install for real (no network in tests).
+const NO_INSTALL = { install: (_dir: string) => ({ pass: true, output: "" }) };
+
 // Queue one job for dir, then work it with a scripted mock batch.
 async function workOneJob(
   dir: string,
@@ -215,6 +218,7 @@ async function workOneJob(
     workRoot,
     testCommand,
     client: new MockBatchClient(cannedDiff),
+    ...NO_INSTALL,
   });
   const rows = listNightJobs(db);
   db.close();
@@ -374,7 +378,7 @@ describe("tallies (savings ledger)", () => {
         estCostMicro: est.batch_micro_usd,
         estStandardMicro: est.standard_micro_usd,
       });
-      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF), ...NO_INSTALL });
       const tallies = db.query("SELECT * FROM tallies").all() as Record<string, unknown>[];
       expect(tallies).toHaveLength(1);
       expect(tallies[0].kind).toBe("night_discount");
@@ -411,6 +415,7 @@ describe("tallies (savings ledger)", () => {
         workRoot,
         testCommand: 'grep -q "a = 1" src/a.ts',
         client: new MockBatchClient(FIX_DIFF),
+        ...NO_INSTALL,
       });
       expect(listNightJobs(db)[0].status).toBe("failed");
       expect(db.query("SELECT * FROM tallies").all()).toHaveLength(0);
@@ -447,7 +452,7 @@ describe("publish (local push)", () => {
         });
       const good = queue("Bump a.");
       const early = queue("Too soon.");
-      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF), ...NO_INSTALL });
       // Second job also ran (same mock fixes the same file) — force it back
       // to queued to prove the unverified refusal path.
       db.prepare("UPDATE night_jobs SET status = 'queued' WHERE id = ?").run(early.id);
@@ -491,7 +496,7 @@ describe("digest (receipt queue)", () => {
         });
       queue("Bump a.");
       queue("Break b.");
-      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF) });
+      await runDueJobs(db, { workRoot, testCommand: "true", client: new MockBatchClient(FIX_DIFF), ...NO_INSTALL });
       // Second job fixed the same file twice — both done; fail one by hand
       // to prove the stopped rendering.
       const all = listNightJobs(db, "done");
@@ -557,5 +562,111 @@ describe("scheduler plists", () => {
     const rolled = nextWakeDates(pastThree);
     expect(fmtPmset(rolled.twoAmTick)).toBe("09/13/26 01:55:00");
     expect(fmtPmset(rolled.sixAmTick)).toBe("09/12/26 05:55:00");
+  });
+});
+
+describe("self-sufficient workdirs (live-fire follow-up)", () => {
+  test("installer runs offline on a depless tree", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pru-n4-deps-"));
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t", version: "0.0.0" }));
+      const res = installWorkdirDeps(dir);
+      expect(res.pass).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("failed report carries base and night output tails", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const { reports, rows, bundle } = await workOneJob(
+        dir, "Bump a.", FIX_DIFF, 'echo NIGHT_MARKER_BASE && exit 1', workRoot,
+      );
+      expect(rows[0].status).toBe("failed");
+      expect(reports[0].markdown).toContain("NIGHT_MARKER_BASE");
+      expect(reports[0].markdown).toContain("base output");
+      rmSync(bundle, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("retry re-snapshots and requeues a conflicted job", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      const job = queueNightJob(db, {
+        projectPath: snap.project_path,
+        repoSnapshot: snap.bundle_path,
+        baseSha: snap.base_sha,
+        taskPrompt: "Bump a.",
+        model: "claude-sonnet-4-5",
+        estCostMicro: est.batch_micro_usd,
+        estStandardMicro: est.standard_micro_usd,
+      });
+      await runDueJobs(db, {
+        workRoot,
+        testCommand: "true",
+        client: new MockBatchClient(BROKEN_DIFF),
+        ...NO_INSTALL,
+      });
+      expect(listNightJobs(db)[0].status).toBe("conflict");
+      const next = retryNightJob(db, job.id);
+      expect(next.status).toBe("queued");
+      expect(next.batch_id).toBeNull();
+      await runDueJobs(db, {
+        workRoot,
+        testCommand: "true",
+        client: new MockBatchClient(FIX_DIFF),
+        ...NO_INSTALL,
+      });
+      expect(listNightJobs(db)[0].status).toBe("done");
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
+  });
+
+  test("retry refuses jobs that are not failed", async () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    const workRoot = mkWorkRoot();
+    try {
+      const db = openLedger(":memory:");
+      const snap = snapshotRepo(dir);
+      const payload = buildDiffPayload(snap, "Bump a.", "claude-sonnet-4-5");
+      const est = estimateNightJob(payload)!;
+      const job = queueNightJob(db, {
+        projectPath: snap.project_path,
+        repoSnapshot: snap.bundle_path,
+        baseSha: snap.base_sha,
+        taskPrompt: "Bump a.",
+        model: "claude-sonnet-4-5",
+        estCostMicro: est.batch_micro_usd,
+        estStandardMicro: est.standard_micro_usd,
+      });
+      await runDueJobs(db, {
+        workRoot,
+        testCommand: "true",
+        client: new MockBatchClient(FIX_DIFF),
+        ...NO_INSTALL,
+      });
+      expect(listNightJobs(db)[0].status).toBe("done");
+      expect(() => retryNightJob(db, job.id)).toThrow(/only retries failed/);
+      expect(() => retryNightJob(db, "nj_missing")).toThrow(/no night job/);
+      db.close();
+      rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+      cleanup(workRoot);
+    }
   });
 });
