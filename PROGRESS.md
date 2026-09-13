@@ -202,7 +202,8 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 > `a/ b/` + `/dev/null` (test-pinned with a live `git apply` proof).
 >
 > Next: **K1 system keychain** (plan §8), then P1 passthrough spec
-> execution. Dogfood loop CLOSED 2026-09-13: both probes green —
+> execution, then **`pru report`** (spec: `docs/report-spec.md` —
+> static receipt HTML, no dashboard ever). Dogfood loop CLOSED 2026-09-13: both probes green —
 > `nj_cbf45f19b72b` (PR #1, closed unmerged on output-quality judgment:
 > tautological tests) and `nj_e11d1a26dcf2` (NIGHT_NOTES landed `done`,
 > publish pending). Tallies total $0.42 wholesale saved. Live failure
