@@ -48,8 +48,9 @@ the storm burns patience, never money.
 ## Requirements
 
 - **Bun** ([bun.sh](https://bun.sh)), **git**, macOS or Linux.
-- An **API key** (`ANTHROPIC_API_KEY`) — *or* a Claude subscription with
-  the daemon in passthrough mode (see "Subscribers").
+- An **API key** (`ANTHROPIC_API_KEY` for Claude Code, `OPENAI_API_KEY`
+  for Codex) — *or* a subscription with the daemon in passthrough mode
+  (see "Subscribers").
 - Night ticks (2am/6am) use launchd on macOS; elsewhere, run
   `pru graveyard --run` from cron.
 
@@ -70,6 +71,21 @@ pru start                                # daemon on localhost:8787 — keep thi
 curl -s localhost:8787/health           # want "key_configured":true
 pru demo                                 # the 60-second story, no keys, no spend
 ```
+
+### Codex setup
+
+`install.sh` wires Claude Code automatically; Codex takes two manual
+steps (its config lives in your shell, not a settings file):
+
+```sh
+export OPENAI_API_KEY="sk-..."                     # or seal it: pru setup --account openai
+export OPENAI_BASE_URL="http://localhost:8787/v1"  # or run everything via: pru shell -- codex
+```
+
+Then engrave the cooperative rule — paste `packs/codex/AGENTS-snippet.md`
+into your `AGENTS.md`: wallets are read-only, a refusal means STOP.
+Both envelopes meter identically (caps, pacing, loop guard,
+compression); the OpenAI route replays its own fixture in `bun run check`.
 
 If Claude Code errors on every call, the daemon is down or keyless —
 the health check tells you which. Escape hatch: remove the `"env"`
@@ -92,10 +108,14 @@ Caps evaluate per request straight from the ledger: arming, hitting,
 and relaxing all take effect instantly, no restart. Re-arming moves the
 limit only — posted spend never clears. Caps in `tokens`/`calls` enforce
 without dollar prices; unpriced models fail closed under USD caps and
-flow under unit caps.
+flow under unit caps. All of this is agent-agnostic: a token is a token
+whether Claude or Codex spent it.
 
-Inside the harnesses: `/pru:status` (Claude Code slash pack) and the
-Codex `AGENTS.md` engraving in `packs/` read the same daemon truth.
+Inside the harnesses: `/pru:status`, `/pru:nightshift`, `/pru:graveyard`,
+`/pru:report` slash packs for Claude Code (synced by `pru install`) and
+an `AGENTS.md` engraving for Codex (paste `packs/codex/AGENTS-snippet.md`
+once, by hand — Codex has no pack directory to sync into). The daemon
+owns all truth; the packs are thin glue.
 Pru meets you in your pane; the CLI stays a control plane.
 
 ## Graveyard Shift
@@ -166,6 +186,7 @@ live-fire lesson, every deviation, logged.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Every call fails | Daemon down or keyless | `curl localhost:8787/health`; restart with key exported or sealed |
+| Codex calls bypass Pru | `OPENAI_BASE_URL` not exported in that shell | Export it (or run under `pru shell`); verify with `pru status` after one call |
 | `key_missing` 429 | No credential for the route | Export/seal a key (API) or use `--auth-mode passthrough` (plan) |
 | 429 storm that resolves | Cap tripped + harness retries | Bounded, free; `pru status` shows the rows; raise or relax the cap |
 | Night jobs stay `queued` | Lid slept through ticks | `pmset -g sched` for wakes; charger in; ticks need the machine awake |

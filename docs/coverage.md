@@ -10,7 +10,7 @@ marked otherwise is verified by fixture replay in `tests/`.
 |---|---|---|
 | `POST /v1/messages` (Anthropic, JSON) | `ANTHROPIC_BASE_URL=http://localhost:8787` | `tests/relay.test.ts` + `claude-code-session.json` |
 | `POST /v1/messages` (Anthropic, `stream:true`) | SSE passthrough, parallel tap | `anthropic-sse.txt`, `claude-code-stream-sse.txt` |
-| `POST /v1/chat/completions` (OpenAI-compat, JSON + SSE) | `OPENAI_BASE_URL=http://localhost:8787/v1` | shape-parsed by the same extractors; no dedicated OpenAI fixture yet (gap, see below) |
+| `POST /v1/chat/completions` (OpenAI-compat, JSON + SSE) | `OPENAI_BASE_URL=http://localhost:8787/v1` | `openai-chat-request.json` + usage incl. cached tokens (parity proven 2026-09-13) |
 | Doubled `/v1` prefix | stripped when upstream base ends in `/v1` | `upstreamUrlFor` unit path (covered indirectly) |
 
 ## Header forwarding (live-fire hotfix, 2026-09-11)
@@ -42,9 +42,9 @@ calls passed. Auth never passes through — Pru injects its own key
    internals reportedly bypass the env var. Mitigation: per-agent recorded
    fixtures in CI plus this doc. A route we never see is spend we never
    book — `pru status` reports relayed spend only.
-2. **No dedicated OpenAI-compat fixture yet.** The extractors handle both
-   envelopes, but only Anthropic shapes replay in tests. Record one Codex
-   session before claiming parity.
+2. **No live OpenAI-compat capture yet.** A committed fixture replays
+   the envelope (parity proven), but it is synthetic like the Claude
+   ones. Record one Codex session before claiming more.
 3. **Live capture still synthetic.** `claude-code-session.json` and
    `claude-code-stream-sse.txt` are labeled SYNTHETIC: protocol-faithful
    shapes, not anonymized live traffic. Standing task: record one live

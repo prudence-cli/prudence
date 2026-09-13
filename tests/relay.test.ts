@@ -431,3 +431,36 @@ describe("cap re-arming (live-fire follow-up)", () => {
     db.close();
   });
 });
+
+describe("openai-compat route (Codex parity proof)", () => {
+  test("chat completions with cached tokens post exact actuals", async () => {
+    const db = openLedger(":memory:");
+    const responseBody = readFileSync(join(FIX, "openai-chat-response.json"), "utf8");
+    const fetchImpl: FetchLike = (async () =>
+      new Response(responseBody, { status: 200, headers: { "content-type": "application/json" } })) as FetchLike;
+    const { app } = createRelay({
+      db,
+      upstreamBaseUrl: "https://api.openai.com/v1",
+      upstreamApiKey: "sk-test",
+      fetchImpl,
+    });
+    const body = JSON.parse(readFileSync(join(FIX, "openai-chat-request.json"), "utf8"));
+    const res = await app.request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(responseBody);
+    const row = db.query("SELECT * FROM usage_ledger").get() as Record<string, unknown>;
+    expect(row.upstream).toBe("openai");
+    expect(row.model).toBe("gpt-5-mini");
+    expect(row.input_tokens).toBe(1000);
+    expect(row.output_tokens).toBe(100);
+    expect(row.cached_tokens).toBe(200);
+    // 800 fresh at $0.75/1M + 200 cached at $0.075/1M + 100 out at $4.50/1M.
+    expect(row.cost_micro_usd).toBe(1065);
+    expect(row.status).toBe("ok");
+    db.close();
+  });
+});
