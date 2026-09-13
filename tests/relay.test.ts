@@ -95,6 +95,14 @@ describe("envelope estimator", () => {
     expect(actualCostMicro({ input_tokens: 150, output_tokens: 90 }, "claude-sonnet-4-5")).toBe(1800);
     expect(actualCostMicro({ input_tokens: 150, output_tokens: 90 }, "mystery-9000")).toBeNull();
   });
+  test("generational pricing resolves specifically (2026-09-13 table)", () => {
+    // Sonnet 5 standard $2/$10.
+    expect(actualCostMicro({ input_tokens: 1000, output_tokens: 1000 }, "claude-sonnet-5-20250801")).toBe(12000);
+    // Retired Opus 4.1 back-compat $15/$75 — must not inherit current rates.
+    expect(actualCostMicro({ input_tokens: 1000, output_tokens: 0 }, "claude-opus-4-1-20250805")).toBe(15000);
+    // Haiku 3.5 $0.80/$4.
+    expect(actualCostMicro({ input_tokens: 1000, output_tokens: 0 }, "claude-haiku-3-5-20241022")).toBe(800);
+  });
 });
 
 describe("relay with no caps (transparent passthrough + books)", () => {

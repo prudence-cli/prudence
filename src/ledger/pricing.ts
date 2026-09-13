@@ -1,11 +1,14 @@
 // Versioned price table + envelope-context estimator.
-// Rates: USD per 1M tokens, sourced from official provider pricing
-// (claude.com/pricing, developers.openai.com/api/docs/pricing,
-// api-docs.deepseek.com). Compiled 2026-09-11. Unknown models return null —
-// Pru never invents a number (truth: unknown_price).
+// Rates: USD per 1M tokens, sourced from official provider pricing.
+// Anthropic rows re-verified 2026-09-13 (platform.claude.com pricing:
+// Sonnet 5 now standard at $2/$10; Opus 4.1/4.0 retired at $15/$75).
+// OpenAI/DeepSeek rows unchanged since 2026-06-01 (next refresh owns them).
+// Order matters: specific generations precede family fallbacks, because the
+// first substring match wins. Unknown models return null — Pru never
+// invents a number (truth: unknown_price).
 
 export const PRICE_TABLE_SOURCE = "official_provider_pricing";
-export const PRICE_TABLE_VERIFIED = "2026-09-11";
+export const PRICE_TABLE_VERIFIED = "2026-09-13";
 export const BATCH_DISCOUNT = 0.5;
 export const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 export const CHARS_PER_TOKEN = 4;
@@ -27,9 +30,14 @@ type PriceEntry = {
 };
 
 const MODEL_PRICES: PriceEntry[] = [
-  { match: ["claude-opus", "opus-4"], inputPerMillion: 5, outputPerMillion: 25, cacheReadPerMillion: 0.5, provider: "anthropic" },
-  { match: ["claude-sonnet", "sonnet-4"], inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, provider: "anthropic" },
-  { match: ["claude-haiku", "haiku-4"], inputPerMillion: 1, outputPerMillion: 5, cacheReadPerMillion: 0.1, provider: "anthropic" },
+  // Anthropic (both dash and dot id spellings; specific first).
+  { match: ["sonnet-5", "sonnet 5"], inputPerMillion: 2, outputPerMillion: 10, cacheReadPerMillion: 0.2, provider: "anthropic" },
+  { match: ["sonnet-4.6", "sonnet-4-6", "sonnet-4.5", "sonnet-4-5", "sonnet-4", "sonnet", "claude-sonnet"], inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, provider: "anthropic" },
+  { match: ["opus-5", "opus-4.8", "opus-4-8", "opus-4.7", "opus-4-7", "opus-4.6", "opus-4-6", "opus-4.5", "opus-4-5"], inputPerMillion: 5, outputPerMillion: 25, cacheReadPerMillion: 0.5, provider: "anthropic" },
+  { match: ["opus-4.1", "opus-4-1", "opus-4.0", "opus-4-0"], inputPerMillion: 15, outputPerMillion: 75, cacheReadPerMillion: 1.5, provider: "anthropic" },
+  { match: ["opus-4", "opus", "claude-opus"], inputPerMillion: 5, outputPerMillion: 25, cacheReadPerMillion: 0.5, provider: "anthropic" },
+  { match: ["haiku-3.5", "haiku-3-5"], inputPerMillion: 0.8, outputPerMillion: 4, cacheReadPerMillion: 0.08, provider: "anthropic" },
+  { match: ["haiku-4.5", "haiku-4-5", "haiku-4", "haiku", "claude-haiku"], inputPerMillion: 1, outputPerMillion: 5, cacheReadPerMillion: 0.1, provider: "anthropic" },
   { match: ["gpt-5.5"], inputPerMillion: 5, outputPerMillion: 30, cacheReadPerMillion: 0.5, provider: "openai" },
   { match: ["gpt-5.4-nano", "gpt-5-nano"], inputPerMillion: 0.2, outputPerMillion: 1.25, cacheReadPerMillion: 0.02, provider: "openai" },
   { match: ["gpt-5.4-mini", "gpt-5-mini"], inputPerMillion: 0.75, outputPerMillion: 4.5, cacheReadPerMillion: 0.075, provider: "openai" },
