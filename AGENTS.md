@@ -125,7 +125,8 @@ criterion was verified, how, what is NEXT.
 - A competing agent harness. Pru runs **inside** Claude Code / Codex, not
   beside them: the relay underneath, the slash pack + MCP + hooks in their
   pane. The `pru` CLI stays a control-plane (install, budget, pace,
-  compress, status, shell, start, demo, graveyard, tallies, setup)
+  compress, status, shell, start, demo, graveyard, tallies, setup,
+  report)
   — any feature that needs its own screen ships inside the harnesses instead.
 - Hosted/team features, dashboards, billing, auth
 - Ollama / hybrid local routing

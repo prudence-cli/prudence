@@ -71,6 +71,7 @@ report. The whole product before a real key.
 | `pru graveyard --publish <id> [--pr]` | Push a verified branch, optionally open the PR |
 | `pru graveyard --schedule` | Install 2am/6am launchd ticks (macOS) |
 | `pru tallies` | What Pru saved you, by kind |
+| `pru report` | The receipt: single-file HTML, no server |
 
 Inside the harnesses: `/pru:status` slash pack for Claude Code and an
 `AGENTS.md` engraving for Codex live in `packs/`. The daemon owns all

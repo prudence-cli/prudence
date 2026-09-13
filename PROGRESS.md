@@ -126,7 +126,7 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | N4 Graveyard launch | Pro feature headline: median $ saved/night | ✅ **LANDED 2026-09-13** (live Batch API: done+verified, PR #1 open, $0.21 set aside — see §7 log) |
 | K1 System keychain | daemon reads OS-guarded secret, env handling ends | ✅ **DONE 2026-09-13** (71 tests green; canary proves no secret in ledger — see §7 log) |
 | P1 Subscription passthrough | auth_mode opt-in, unit caps, token tallies | ✅ **DONE 2026-09-13** (75 tests green; all five spec §7 criteria — see §7 log) |
-| `pru report` | static receipt HTML, never a dashboard | ⬜ NEXT (spec: `docs/report-spec.md`) |
+| `pru report` | static receipt HTML, never a dashboard | ✅ **DONE 2026-09-13** (77 tests green; figures equal ledger, zero remote refs — see §7 log) |
 
 ---
 
@@ -193,11 +193,25 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — `pru report` (K1 + P1 done)
+## 7. ⏭️ NEXT AGENT ACTION — OPEN TRACKS (K1 + P1 + report done)
 
-> Execute **`pru report`** per `docs/report-spec.md` §5 (four acceptance
-> criteria): static single-file receipt HTML from the ledger, figures
-> equal to `digest` + `tallies`, no remote assets, check green.
+> K1, P1, and `pru report` are built and green (77 tests). Open threads,
+> all owner-side: live dogfood nights, N4 merge(s), landing/domain,
+> synthetic-fixture swap. Next build only on owner direction or fresh
+> dogfood evidence.
+
+### Report close-out log (2026-09-13, owner: agent session)
+
+- Built: `src/report.ts` (sessions/caps/refusals/nights/tallies
+  queries, dark-crow-copper single file, inline CSS only, hostile
+  strings escaped, untraceable renders as "insufficient data");
+  `pru report [--since/--session/--output]`; `/pru:report` pack
+  (auto-synced by install).
+- Verified: `bun run check` 77 pass — figures equal `digest`/`tallies`
+  queries, zero `src|href|url(http` occurrences (smoke-confirmed on a
+  live file too), escaping proven with a hostile task prompt. One
+  self-caught test bug (asserted tally detail renders — the table
+  shows kind/amount/entries by design; asserted that).
 
 ### P1 close-out log (2026-09-13, owner: agent session)
 

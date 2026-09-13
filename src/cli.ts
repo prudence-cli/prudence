@@ -37,6 +37,7 @@ import { retryNightJob, runDueJobs } from "./graveyard/runner";
 import { publishNightJob } from "./graveyard/publish";
 import { scheduleGraveyard, unscheduleGraveyard, armWakes } from "./graveyard/schedule";
 import { buildDigest } from "./graveyard/digest";
+import { buildReportHtml } from "./report";
 import type { Hono } from "hono";
 
 const program = new Command();
@@ -634,6 +635,31 @@ program
         const tokens = r.amount_tokens > 0 ? `${r.amount_tokens.toLocaleString("en-US")} tokens` : null;
         console.log(`  #${r.id} ${r.kind} ${[money, tokens].filter(Boolean).join(" + ") || "$0.00"} — ${r.detail ?? ""}`);
       }
+    } finally {
+      db.close();
+    }
+  });
+
+program
+  .command("report")
+  .description("Write the receipt: single-file HTML from the ledger.")
+  .option("--since <days>", "trailing window in days (default: all time)")
+  .option("--session <id>", "one session only")
+  .option("--output <path>", "output file")
+  .action((opts: { since?: string; session?: string; output?: string }) => {
+    const sinceDays = opts.since === undefined ? undefined : Number(opts.since);
+    if (sinceDays !== undefined && !(sinceDays > 0)) {
+      console.error("Pru needs a positive day count.");
+      process.exitCode = 1;
+      return;
+    }
+    const db = openLedger();
+    try {
+      const html = buildReportHtml(db, { sinceDays, sessionId: opts.session });
+      const stamp = new Date().toISOString().slice(0, 10);
+      const file = opts.output ?? join(process.cwd(), `pru-report-${stamp}.html`);
+      writeFileSync(file, html);
+      console.log(`Pru wrote the receipt to ${file}. Open it anywhere — no server, no network.`);
     } finally {
       db.close();
     }
