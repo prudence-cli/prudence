@@ -34,6 +34,10 @@ export type RelayOptions = {
   upstreamApiKey?: string;
   anthropicVersion?: string;
   fetchImpl?: FetchLike;
+  // key (default): Pru authenticates with its own key, fail-closed without
+  // one. passthrough: Pru forwards the client's Authorization verbatim —
+  // explicit opt-in only, never silent (spec docs/subscription-passthrough).
+  authMode?: "key" | "passthrough";
 };
 
 // Minimal upstream shape: real fetch satisfies it, stubs stay trivial.
@@ -178,6 +182,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
   const apiKey = opts.upstreamApiKey;
   const anthropicVersion = opts.anthropicVersion ?? "2023-06-01";
   const fetchImpl = opts.fetchImpl ?? fetch;
+  const authMode = opts.authMode ?? "key";
   const app = new Hono();
 
   // Loop guard: consecutive refusal strikes per session. A call that posts
@@ -220,7 +225,8 @@ export function createRelay(opts: RelayOptions): RelayContext {
     return c.json({
       ok: true,
       upstream: upstreamBase,
-      key_configured: Boolean(apiKey),
+      auth_mode: authMode,
+      key_configured: authMode === "passthrough" ? "client" : Boolean(apiKey),
       caps_armed: caps.n,
       truth: "pru_ledger",
     });
@@ -244,13 +250,14 @@ export function createRelay(opts: RelayOptions): RelayContext {
     const reqHash = sha1(bodyText);
     const streaming = body.stream === true;
 
-    // Pre-flight: price the call inside its envelope, then reserve inside
-    // one transaction. Fits → reserved += cost_max. Breach → typed refusal.
+    // Pre-flight: measure the call, price it when possible, then reserve
+    // in every applicable cap's own unit inside one transaction.
     const caps = applicableCaps(db, session);
-    const spent = caps.reduce((m, cap) => Math.max(m, cap.spent_micro_usd), 0);
-    const reserved = caps.reduce((m, cap) => Math.max(m, cap.reserved_micro_usd), 0);
-    const tightestCap = caps.length
-      ? caps.reduce((a, b) =>
+    const usdCaps = caps.filter((cap) => cap.unit === "usd");
+    const spent = usdCaps.reduce((m, cap) => Math.max(m, cap.spent_micro_usd), 0);
+    const reserved = usdCaps.reduce((m, cap) => Math.max(m, cap.reserved_micro_usd), 0);
+    const tightestUsdCap = usdCaps.length
+      ? usdCaps.reduce((a, b) =>
           a.limit_micro_usd - a.spent_micro_usd - a.reserved_micro_usd <=
           b.limit_micro_usd - b.spent_micro_usd - b.reserved_micro_usd
             ? a
@@ -264,20 +271,28 @@ export function createRelay(opts: RelayOptions): RelayContext {
         session_id: session.id,
         spent_micro_usd: spent,
         reserved_micro_usd: reserved,
-        cap_micro_usd: tightestCap,
+        cap_micro_usd: tightestUsdCap,
       },
     );
+    // Measure always survives; price may not. Token/call caps enforce on
+    // measure, usd caps fail closed on unknown price (never guess).
+    const costs = {
+      usd: estimate.ok ? estimate.cost_max_micro_usd : 0,
+      tokens: estimate.input_tokens_est + estimate.max_output_tokens,
+      calls: 1,
+    };
 
-    // Fail closed on unpriced models for capped sessions; uncapped sessions
-    // pass through with an honest unknown_price marker (never guess).
+    // Fail closed on unpriced models for usd-capped sessions; uncapped (or
+    // token/call-capped) sessions pass through with an honest
+    // unknown_price marker.
     if (!estimate.ok) {
-      if (tightestCap !== null) {
+      if (usdCaps.length > 0) {
         const strikes = countStrike(session.id);
         const refusal = insertRefusal(db, {
           sessionId: session.id,
           type: "unknown_price",
           spentMicro: spent,
-          capMicro: tightestCap,
+          capMicro: tightestUsdCap,
           reqHash,
           message:
             `Pru cannot price model "${model}" — refusing a capped session rather than guessing. ` +
@@ -288,7 +303,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
       }
     }
 
-    const costMax = estimate.ok ? estimate.cost_max_micro_usd : 0;
+    const costMax = costs.usd;
 
     // Compression pass (F3.5): conservative strip-list on a clone, gated by
     // min_save_tokens. The guard above stays pessimistic — it priced the
@@ -354,7 +369,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
       session,
       upstream: isAnthropicPath(path) ? "anthropic" : "openai",
       model,
-      costMaxMicro: costMax,
+      costs,
       reqHash,
       tokensSaved,
     });
@@ -382,7 +397,13 @@ export function createRelay(opts: RelayOptions): RelayContext {
     };
     c.req.raw.signal.addEventListener("abort", onAbort, { once: true });
 
-    if (!apiKey) {
+    // Credentials resolve here, never earlier: passthrough forwards the
+    // client's own Authorization verbatim (explicit opt-in only), key mode
+    // injects Pru's key and fails closed without one.
+    const clientAuth = c.req.header("authorization") ?? undefined;
+    const passthroughKey = authMode === "passthrough" ? clientAuth : undefined;
+    const effectiveKey = authMode === "passthrough" ? passthroughKey : apiKey;
+    if (!effectiveKey) {
       const strikes = countStrike(session.id);
       const refusal = insertRefusal(db, {
         sessionId: session.id,
@@ -390,7 +411,9 @@ export function createRelay(opts: RelayOptions): RelayContext {
         spentMicro: spent,
         reqHash,
         message:
-          "Pru has no upstream key for this route. Set it in ~/.prudence/config.yaml, then retry.",
+          authMode === "passthrough"
+            ? "Pru has no credentials to forward for this route. Authenticate the harness and retry."
+            : "Pru has no upstream key for this route. Set it in ~/.prudence/config.yaml, then retry.",
         detail: strikeDetail(strikes),
       });
       reconcileCall(db, { ledgerId, costMicro: 0, status: "aborted", truth: "aborted" });
@@ -401,8 +424,7 @@ export function createRelay(opts: RelayOptions): RelayContext {
     const anthropic = isAnthropicPath(path);
     // Feature headers pass through: beta flags and API versions change what
     // the upstream accepts (context management dies without its beta), so
-    // stripping them breaks real traffic. Auth never passes through — Pru
-    // injects its own key below (BYOK boundary).
+    // stripping them breaks real traffic.
     const passthroughNames = anthropic
       ? ["anthropic-beta", "anthropic-version", "user-agent", "accept"]
       : ["openai-beta", "openai-organization", "openai-project", "user-agent", "accept"];
@@ -413,11 +435,19 @@ export function createRelay(opts: RelayOptions): RelayContext {
       const value = c.req.header(name);
       if (value !== undefined && value !== "") headers[name] = value;
     }
-    if (anthropic) {
-      headers["x-api-key"] = apiKey;
+    if (authMode === "passthrough") {
+      // Verbatim, uninterpreted, never persisted: the value below is the
+      // client's own credential. It appears in no row, log, or message.
+      headers["authorization"] = effectiveKey;
+      if (anthropic) {
+        headers["anthropic-version"] ??= anthropicVersion;
+        delete headers["x-api-key"];
+      }
+    } else if (anthropic) {
+      headers["x-api-key"] = effectiveKey;
       headers["anthropic-version"] ??= anthropicVersion;
     } else {
-      headers["authorization"] = `Bearer ${apiKey}`;
+      headers["authorization"] = `Bearer ${effectiveKey}`;
     }
 
     let upstream: Response;

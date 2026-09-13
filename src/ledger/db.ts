@@ -122,12 +122,26 @@ export function ensureSession(
   return row;
 }
 
+export type CapUnit = "usd" | "tokens" | "calls";
+
 export type CapRow = {
   scope: string;
   scope_key: string;
   limit_micro_usd: number;
   spent_micro_usd: number;
   reserved_micro_usd: number;
+  unit: CapUnit;
+  limit_native: number;
+  spent_native: number;
+  reserved_native: number;
+};
+
+// Costs of one call in every unit. Reservation checks each applicable cap
+// in that cap's own unit.
+export type CallCosts = {
+  usd: number;
+  tokens: number;
+  calls: number;
 };
 
 // Resolution order session > project > global (plan §1.4). Every applicable
@@ -165,7 +179,7 @@ export function reserveCall(
     session: SessionRow;
     upstream: string;
     model: string;
-    costMaxMicro: number;
+    costs: CallCosts;
     reqHash: string;
     tokensSaved?: number;
     detail?: string | null;
@@ -174,23 +188,40 @@ export function reserveCall(
   const txn = db.transaction(() => {
     const caps = applicableCaps(db, input.session);
     for (const cap of caps) {
-      if (cap.spent_micro_usd + cap.reserved_micro_usd + input.costMaxMicro > cap.limit_micro_usd) {
-        const spent = cap.spent_micro_usd;
+      const native = input.costs[cap.unit] ?? 0;
+      if (cap.spent_native + cap.reserved_native + native > cap.limit_native) {
+        const spent = cap.spent_native;
         const message =
-          `Pru closed the ledger for this session (${fmtUsd(spent)} spent). ` +
-          `Resume with: pru budget set 10 — or relax the watch: pru budget off.`;
+          cap.unit === "usd"
+            ? `Pru closed the ledger for this session (${fmtUsd(spent)} spent). ` +
+              `Resume with: pru budget set 10 — or relax the watch: pru budget off.`
+            : cap.unit === "calls"
+              ? `Pru closed the ledger for this session (${spent} calls). ` +
+                `Resume with: pru budget set 300 --unit calls — or relax the watch: pru budget off.`
+              : `Pru closed the ledger for this session (${spent} tokens). ` +
+                `Resume with: pru budget set 100000 --unit tokens — or relax the watch: pru budget off.`;
         const res = db
           .prepare(
-            "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, req_hash, message, detail, created_at) VALUES (?, 'budget_exhausted', ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO refusal_events (session_id, type, spent_micro_usd, cap_micro_usd, call_estimate_micro_usd, call_estimate_native, req_hash, message, detail, created_at) VALUES (?, 'budget_exhausted', ?, ?, ?, ?, ?, ?, ?, ?)",
           )
-          .run(input.session.id, spent, cap.limit_micro_usd, input.costMaxMicro, input.reqHash, message, input.detail ?? null, Date.now());
+          .run(
+            input.session.id,
+            cap.unit === "usd" ? spent : 0,
+            cap.unit === "usd" ? cap.limit_micro_usd : null,
+            cap.unit === "usd" ? input.costs.usd : 0,
+            native,
+            input.reqHash,
+            message,
+            input.detail ?? null,
+            Date.now(),
+          );
         const refusal: Refusal = {
           id: Number(res.lastInsertRowid),
           session_id: input.session.id,
           type: "budget_exhausted",
-          spent_micro_usd: spent,
-          cap_micro_usd: cap.limit_micro_usd,
-          call_estimate_micro_usd: input.costMaxMicro,
+          spent_micro_usd: cap.unit === "usd" ? spent : 0,
+          cap_micro_usd: cap.unit === "usd" ? cap.limit_micro_usd : null,
+          call_estimate_micro_usd: cap.unit === "usd" ? input.costs.usd : 0,
           message,
           detail: input.detail ?? null,
         };
@@ -198,15 +229,32 @@ export function reserveCall(
       }
     }
     for (const cap of caps) {
-      db.prepare(
-        "UPDATE cap_state SET reserved_micro_usd = reserved_micro_usd + ? WHERE scope = ? AND scope_key = ?",
-      ).run(input.costMaxMicro, cap.scope, cap.scope_key);
+      const native = input.costs[cap.unit] ?? 0;
+      if (cap.unit === "usd") {
+        db.prepare(
+          "UPDATE cap_state SET reserved_micro_usd = reserved_micro_usd + ?, reserved_native = reserved_native + ? WHERE scope = ? AND scope_key = ?",
+        ).run(input.costs.usd, native, cap.scope, cap.scope_key);
+      } else {
+        db.prepare(
+          "UPDATE cap_state SET reserved_native = reserved_native + ? WHERE scope = ? AND scope_key = ?",
+        ).run(native, cap.scope, cap.scope_key);
+      }
     }
     const ledgerId = `lr_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
     db.prepare(
-      `INSERT INTO usage_ledger (id, session_id, upstream, model, reserved_micro_usd, tokens_saved, req_hash, truth, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'envelope_estimate', 'reserved', ?)`,
-    ).run(ledgerId, input.session.id, input.upstream, input.model, input.costMaxMicro, input.tokensSaved ?? 0, input.reqHash, Date.now());
+      `INSERT INTO usage_ledger (id, session_id, upstream, model, reserved_micro_usd, reserved_tokens, reserved_calls, tokens_saved, req_hash, truth, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 'envelope_estimate', 'reserved', ?)`,
+    ).run(
+      ledgerId,
+      input.session.id,
+      input.upstream,
+      input.model,
+      input.costs.usd,
+      input.costs.tokens,
+      input.tokensSaved ?? 0,
+      input.reqHash,
+      Date.now(),
+    );
     return { ok: true as const, ledgerId };
   });
   return txn() as
@@ -236,6 +284,8 @@ export function reconcileCall(db: Database, input: ReconcileInput): boolean {
       | {
           session_id: string;
           reserved_micro_usd: number;
+          reserved_tokens: number;
+          reserved_calls: number;
           status: string;
         }
       | null;
@@ -243,22 +293,42 @@ export function reconcileCall(db: Database, input: ReconcileInput): boolean {
     const session = db
       .query("SELECT * FROM session WHERE id = ?")
       .get(row.session_id) as SessionRow;
+    const status = input.status ?? "ok";
+    // Actuals in every unit. Calls post only on ok (consistent with the
+    // posted-calls count); tokens post provider-reported actuals, else 0.
+    const tokensActual =
+      (input.inputTokens ?? 0) + (input.outputTokens ?? 0);
+    const callsActual = status === "ok" ? 1 : 0;
     const caps = applicableCaps(db, session);
     for (const cap of caps) {
-      db.prepare(
-        "UPDATE cap_state SET reserved_micro_usd = reserved_micro_usd - ?, spent_micro_usd = spent_micro_usd + ? WHERE scope = ? AND scope_key = ?",
-      ).run(row.reserved_micro_usd, input.costMicro, cap.scope, cap.scope_key);
+      if (cap.unit === "usd") {
+        db.prepare(
+          "UPDATE cap_state SET reserved_micro_usd = reserved_micro_usd - ?, spent_micro_usd = spent_micro_usd + ?, reserved_native = reserved_native - ?, spent_native = spent_native + ? WHERE scope = ? AND scope_key = ?",
+        ).run(row.reserved_micro_usd, input.costMicro, row.reserved_micro_usd, input.costMicro, cap.scope, cap.scope_key);
+      } else if (cap.unit === "tokens") {
+        db.prepare(
+          "UPDATE cap_state SET reserved_native = reserved_native - ?, spent_native = spent_native + ? WHERE scope = ? AND scope_key = ?",
+        ).run(row.reserved_tokens, tokensActual, cap.scope, cap.scope_key);
+      } else {
+        db.prepare(
+          "UPDATE cap_state SET reserved_native = reserved_native - ?, spent_native = spent_native + ? WHERE scope = ? AND scope_key = ?",
+        ).run(row.reserved_calls, callsActual, cap.scope, cap.scope_key);
+      }
     }
     db.prepare(
       `UPDATE usage_ledger SET cost_micro_usd = ?, reserved_micro_usd = 0,
+        cost_tokens = ?, reserved_tokens = 0,
+        cost_calls = ?, reserved_calls = 0,
         input_tokens = ?, output_tokens = ?, cached_tokens = ?,
         status = ?, truth = ?, completed_at = ? WHERE id = ?`,
     ).run(
       input.costMicro,
+      tokensActual,
+      callsActual,
       input.inputTokens ?? null,
       input.outputTokens ?? null,
       input.cachedTokens ?? 0,
-      input.status ?? "ok",
+      status,
       input.truth ?? "provider_usage",
       Date.now(),
       input.ledgerId,
@@ -323,13 +393,24 @@ export function setCap(
   db: Database,
   scope: string,
   scopeKey: string,
-  limitMicro: number,
+  limitNative: number,
+  unit: CapUnit = "usd",
 ): void {
+  // limitNative is micro-USD for usd caps, counts otherwise. Re-arming
+  // moves the limit only — spend stands still (regression-pinned).
+  const limitMicro = unit === "usd" ? Math.round(limitNative) : 0;
+  const existing = getCap(db, scope, scopeKey);
   db.prepare(
-    `INSERT INTO cap_state (scope, scope_key, limit_micro_usd, spent_micro_usd, reserved_micro_usd)
-     VALUES (?, ?, ?, 0, 0)
-     ON CONFLICT (scope, scope_key) DO UPDATE SET limit_micro_usd = excluded.limit_micro_usd`,
-  ).run(scope, scopeKey, limitMicro);
+    `INSERT INTO cap_state (scope, scope_key, limit_micro_usd, spent_micro_usd, reserved_micro_usd, unit, limit_native, spent_native, reserved_native)
+     VALUES (?, ?, ?, 0, 0, ?, ?, 0, 0)
+     ON CONFLICT (scope, scope_key) DO UPDATE SET limit_micro_usd = excluded.limit_micro_usd, unit = excluded.unit, limit_native = excluded.limit_native`,
+  ).run(scope, scopeKey, limitMicro, unit, Math.round(limitNative));
+  if (existing && existing.unit !== unit) {
+    // New currency, empty coffers: old counts are meaningless in the new unit.
+    db.prepare(
+      "UPDATE cap_state SET spent_micro_usd = 0, reserved_micro_usd = 0, spent_native = 0, reserved_native = 0 WHERE scope = ? AND scope_key = ?",
+    ).run(scope, scopeKey);
+  }
 }
 
 export function clearCap(db: Database, scope: string, scopeKey: string): boolean {
@@ -349,9 +430,15 @@ export type StatusView = {
   session: SessionRow;
   caps: CapRow[];
   spent_micro_usd: number;
+  spent_tokens: number;
   calls: number;
   refusals: Refusal[];
 };
+
+export function formatCapAmount(value: number, unit: CapUnit): string {
+  if (unit === "usd") return fmtUsd(value);
+  return `${value.toLocaleString("en-US")} ${unit}`;
+}
 
 export function getStatus(db: Database, sessionId?: string): StatusView | null {
   const session = sessionId
@@ -363,9 +450,9 @@ export function getStatus(db: Database, sessionId?: string): StatusView | null {
   const caps = applicableCaps(db, session);
   const totals = db
     .query(
-      "SELECT COUNT(*) AS n, COALESCE(SUM(cost_micro_usd), 0) AS spent FROM usage_ledger WHERE session_id = ? AND status = 'ok'",
+      "SELECT COUNT(*) AS n, COALESCE(SUM(cost_micro_usd), 0) AS spent, COALESCE(SUM(cost_tokens), 0) AS tokens FROM usage_ledger WHERE session_id = ? AND status = 'ok'",
     )
-    .get(session.id) as { n: number; spent: number };
+    .get(session.id) as { n: number; spent: number; tokens: number };
   const refusals = db
     .query("SELECT * FROM refusal_events WHERE session_id = ? ORDER BY created_at DESC LIMIT 5")
     .all(session.id) as Refusal[];
@@ -373,6 +460,7 @@ export function getStatus(db: Database, sessionId?: string): StatusView | null {
     session,
     caps,
     spent_micro_usd: totals.spent,
+    spent_tokens: totals.tokens,
     calls: totals.n,
     refusals,
   };
@@ -613,6 +701,7 @@ export type TallyRow = {
   id: number;
   kind: string;
   amount_micro_usd: number;
+  amount_tokens: number;
   detail: string | null;
   created_at: number;
 };
@@ -622,25 +711,29 @@ export function recordTally(
   kind: string,
   amountMicro: number,
   detail?: string,
+  amountTokens = 0,
 ): TallyRow {
+  const micro = Math.max(0, Math.round(amountMicro));
+  const tokens = Math.max(0, Math.round(amountTokens));
   const res = db
-    .prepare("INSERT INTO tallies (kind, amount_micro_usd, detail, created_at) VALUES (?, ?, ?, ?)")
-    .run(kind, Math.max(0, Math.round(amountMicro)), detail ?? null, Date.now());
+    .prepare("INSERT INTO tallies (kind, amount_micro_usd, amount_tokens, detail, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(kind, micro, tokens, detail ?? null, Date.now());
   return {
     id: Number(res.lastInsertRowid),
     kind,
-    amount_micro_usd: Math.max(0, Math.round(amountMicro)),
+    amount_micro_usd: micro,
+    amount_tokens: tokens,
     detail: detail ?? null,
     created_at: Date.now(),
   };
 }
 
-export function tallyTotals(db: Database): { kind: string; total_micro_usd: number; n: number }[] {
+export function tallyTotals(db: Database): { kind: string; total_micro_usd: number; total_tokens: number; n: number }[] {
   return db
     .query(
-      "SELECT kind, COALESCE(SUM(amount_micro_usd), 0) AS total_micro_usd, COUNT(*) AS n FROM tallies GROUP BY kind ORDER BY total_micro_usd DESC",
+      "SELECT kind, COALESCE(SUM(amount_micro_usd), 0) AS total_micro_usd, COALESCE(SUM(amount_tokens), 0) AS total_tokens, COUNT(*) AS n FROM tallies GROUP BY kind ORDER BY total_micro_usd DESC",
     )
-    .all() as { kind: string; total_micro_usd: number; n: number }[];
+    .all() as { kind: string; total_micro_usd: number; total_tokens: number; n: number }[];
 }
 
 export function recentTallies(db: Database, limit = 10): TallyRow[] {

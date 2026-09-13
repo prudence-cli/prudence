@@ -9,6 +9,7 @@ import { join } from "node:path";
 import {
   clearCap,
   fmtUsd,
+  formatCapAmount,
   getCap,
   getStatus,
   listNightJobs,
@@ -45,28 +46,36 @@ const budget = program.command("budget").description("Manage the ledger watch.")
 
 budget
   .command("set")
-  .description("Arm a budget cap (USD).")
-  .argument("<usd>", "cap amount in USD")
+  .description("Arm a budget cap (USD, tokens, or calls).")
+  .argument("<amount>", "cap amount in the chosen unit")
   .option("--scope <scope>", "session | project | global", "global")
   .option("--key <key>", "scope key (session id, project path, or * for global)", "*")
-  .action((usd: string, opts: { scope: string; key: string }) => {
-    const value = Number(usd);
+  .option("--unit <unit>", "usd | tokens | calls", "usd")
+  .action((amount: string, opts: { scope: string; key: string; unit: string }) => {
+    const unit = opts.unit === "tokens" || opts.unit === "calls" ? opts.unit : "usd";
+    const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
-      console.error("Pru needs a positive USD amount.");
+      console.error("Pru needs a positive amount.");
       process.exitCode = 1;
       return;
     }
+    const native = unit === "usd" ? usdToMicro(value) : Math.floor(value);
     const db = openLedger();
-    setCap(db, opts.scope, opts.key, usdToMicro(value));
+    setCap(db, opts.scope, opts.key, native, unit);
     const cap = getCap(db, opts.scope, opts.key);
     db.close();
-    console.log(`Pru is watching: ${fmtUsd(usdToMicro(value))} cap armed on ${opts.scope}:${opts.key}.`);
+    console.log(
+      unit === "usd"
+        ? `Pru is watching: ${fmtUsd(native)} cap armed on ${opts.scope}:${opts.key}.`
+        : `Pru is watching: ${native.toLocaleString("en-US")} ${unit} cap armed on ${opts.scope}:${opts.key}.`,
+    );
     // The confirmation reads the row back: re-arming never clears spend,
     // and the bar must say so.
     if (isTTY && cap) {
-      console.log(
-        `${coinBar(cap.spent_micro_usd, cap.limit_micro_usd)} ${bold(fmtUsd(cap.spent_micro_usd))} of ${fmtUsd(cap.limit_micro_usd)} spent.`,
-      );
+      const spent = formatCapAmount(cap.spent_native, cap.unit);
+      const limit = formatCapAmount(cap.limit_native, cap.unit);
+      const bar = cap.unit === "usd" ? coinBar(cap.spent_native, cap.limit_native) : "";
+      console.log(`${bar ? bar + " " : ""}${bold(spent)} of ${limit} spent.`);
     }
   });
 
@@ -94,13 +103,14 @@ program
     }
     const lines = [
       `Session: ${view.session.id} (${view.session.agent}, ${view.session.project_path})`,
-      `Calls on the books: ${view.calls}, posted spend: ${fmtUsd(view.spent_micro_usd)}`,
+      `Calls on the books: ${view.calls}, posted spend: ${fmtUsd(view.spent_micro_usd)}` +
+        (view.spent_tokens > 0 ? `, ${view.spent_tokens.toLocaleString("en-US")} tokens` : ""),
     ];
     for (const cap of view.caps) {
       const base =
-        `Cap ${cap.scope}:${cap.scope_key}: ${fmtUsd(cap.spent_micro_usd)} spent of ${fmtUsd(cap.limit_micro_usd)}` +
-        (cap.reserved_micro_usd > 0 ? ` (${fmtUsd(cap.reserved_micro_usd)} reserved in flight)` : "");
-      lines.push(isTTY ? `${coinBar(cap.spent_micro_usd, cap.limit_micro_usd)} ${base}` : base);
+        `Cap ${cap.scope}:${cap.scope_key}: ${formatCapAmount(cap.spent_native, cap.unit)} spent of ${formatCapAmount(cap.limit_native, cap.unit)}` +
+        (cap.reserved_native > 0 ? ` (${formatCapAmount(cap.reserved_native, cap.unit)} reserved in flight)` : "");
+      lines.push(isTTY && cap.unit === "usd" ? `${coinBar(cap.spent_native, cap.limit_native)} ${base}` : base);
     }
     for (const r of view.refusals) {
       lines.push(`Refusal #${r.id} [${r.type}]: ${r.message}`);
@@ -113,19 +123,23 @@ program
   .command("start")
   .description("Start the local gateway daemon.")
   .option("--port <port>", "listen port", "8787")
-  .action((opts: { port: string }) => {
+  .option("--auth-mode <mode>", "key | passthrough (explicit subscriber opt-in)", "key")
+  .action((opts: { port: string; authMode: string }) => {
     const port = Number(opts.port);
     if (!Number.isFinite(port) || port <= 0) {
       console.error("Pru needs a valid port.");
       process.exitCode = 1;
       return;
     }
+    const authMode = opts.authMode === "passthrough" ? "passthrough" : "key";
     const upstreamBase =
       process.env.PRU_UPSTREAM_BASE_URL ?? "https://api.anthropic.com";
     const apiKey = resolveUpstreamKey();
-    const { app } = createRelay({ upstreamBaseUrl: upstreamBase, upstreamApiKey: apiKey });
+    const { app } = createRelay({ upstreamBaseUrl: upstreamBase, upstreamApiKey: apiKey, authMode });
     Bun.serve({ port, fetch: app.fetch });
-    console.log(`Pru is on the books at http://localhost:${port}. Upstream: ${upstreamBase}.`);
+    console.log(
+      `Pru is on the books at http://localhost:${port}. Upstream: ${upstreamBase} (auth: ${authMode}).`,
+    );
   });
 
 program
@@ -611,10 +625,14 @@ program
         return;
       }
       for (const t of totals) {
-        console.log(`${t.kind}: ${fmtUsd(t.total_micro_usd)} across ${t.n} ${t.n === 1 ? "entry" : "entries"}`);
+        const money = t.total_micro_usd > 0 ? fmtUsd(t.total_micro_usd) : null;
+        const tokens = t.total_tokens > 0 ? `${t.total_tokens.toLocaleString("en-US")} tokens` : null;
+        console.log(`${t.kind}: ${[money, tokens].filter(Boolean).join(" + ") || "$0.00"} across ${t.n} ${t.n === 1 ? "entry" : "entries"}`);
       }
       for (const r of recentTallies(db, 5)) {
-        console.log(`  #${r.id} ${r.kind} ${fmtUsd(r.amount_micro_usd)} — ${r.detail ?? ""}`);
+        const money = r.amount_micro_usd > 0 ? fmtUsd(r.amount_micro_usd) : null;
+        const tokens = r.amount_tokens > 0 ? `${r.amount_tokens.toLocaleString("en-US")} tokens` : null;
+        console.log(`  #${r.id} ${r.kind} ${[money, tokens].filter(Boolean).join(" + ") || "$0.00"} — ${r.detail ?? ""}`);
       }
     } finally {
       db.close();

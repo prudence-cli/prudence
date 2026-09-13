@@ -125,7 +125,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ✅ **DONE (code) 2026-09-11** (48 tests green; push verified, PR + live dogfood owner-gated — see §7 log) |
 | N4 Graveyard launch | Pro feature headline: median $ saved/night | ✅ **LANDED 2026-09-13** (live Batch API: done+verified, PR #1 open, $0.21 set aside — see §7 log) |
 | K1 System keychain | daemon reads OS-guarded secret, env handling ends | ✅ **DONE 2026-09-13** (71 tests green; canary proves no secret in ledger — see §7 log) |
-| P1 Subscription passthrough | auth_mode opt-in, unit caps, token tallies | ⬜ NEXT (spec: `docs/subscription-passthrough.md`) |
+| P1 Subscription passthrough | auth_mode opt-in, unit caps, token tallies | ✅ **DONE 2026-09-13** (75 tests green; all five spec §7 criteria — see §7 log) |
+| `pru report` | static receipt HTML, never a dashboard | ⬜ NEXT (spec: `docs/report-spec.md`) |
 
 ---
 
@@ -192,11 +193,36 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — P1 PASSTHROUGH (K1 done, dogfood green)
+## 7. ⏭️ NEXT AGENT ACTION — `pru report` (K1 + P1 done)
 
-> Execute **P1 subscription passthrough** per
-> `docs/subscription-passthrough.md` §7 (five acceptance criteria).
-> K1 is the foundation (resolution order already keychain-aware).
+> Execute **`pru report`** per `docs/report-spec.md` §5 (four acceptance
+> criteria): static single-file receipt HTML from the ledger, figures
+> equal to `digest` + `tallies`, no remote assets, check green.
+
+### P1 close-out log (2026-09-13, owner: agent session)
+
+- Built: `007_cap_units.sql` (cap `unit`, native limit/counters with
+  usd backfill, usage token/call columns, refusal native estimate,
+  tally token amounts); multi-unit reserve/reconcile (each cap checked
+  in its own unit; usd rows keep micro columns true); unit-aware 429s
+  (`(N calls).` / `(N tokens).` additions, usd canonical untouched);
+  token measure surviving unknown prices; relay `authMode` (verbatim
+  `Authorization` forward, explicit opt-in only, keyless-missing refusal
+  when the client sends none); `pru start --auth-mode`,
+  `pru budget set --unit`; `formatCapAmount`, token totals in status
+  and tallies.
+- Verified: `bun run check` 75 pass — all five spec §7 criteria:
+  canary (exact auth arrives, zero ledger bytes contain it), 200-call
+  cap halting the 201st with overshoot ≤ 1 call, token-unit
+  enforcement on unpriced models without `unknown_price`, unchanged
+  fail-closed key behavior, green check. One self-caught test bug
+  (asserted dollars stay 0 under unit caps — wrong: priced models
+  still book real dollars alongside; now asserted).
+- Deviations logged: (i) No `config.yaml` reader yet — opt-in rides a
+  CLI flag, matching the single-upstream daemon (spec shows the file
+  shape for later). (ii) Pace stays usd-only; unit users pace via
+  budget units. (iii) Unit-switch on an armed cap zeroes counters
+  (new currency, empty coffers).
 
 ### K1 close-out log (2026-09-13, owner: agent session)
 

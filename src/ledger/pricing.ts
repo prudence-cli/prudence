@@ -104,6 +104,10 @@ export type EstimateUnknown = {
   ok: false;
   truth: "unknown_price";
   model: string;
+  // Measure survives unknown prices: tokens are countable even when they
+  // are not billable (P1 token-unit enforcement on unpriced models).
+  input_tokens_est: number;
+  max_output_tokens: number;
 };
 
 // Integer math throughout: rates are per-1M, so
@@ -112,14 +116,16 @@ export function estimateCall(
   call: CallShape,
   _env: Envelope,
 ): EstimateOk | EstimateUnknown {
-  const pricing = modelPricing(call.model);
-  if (!pricing) return { ok: false, truth: "unknown_price", model: call.model };
   const inputTokens = measureInputTokens(call.input_text);
   const maxOut =
     Number.isFinite(call.max_output_tokens as number) &&
     (call.max_output_tokens as number) > 0
       ? Math.floor(call.max_output_tokens as number)
       : DEFAULT_MAX_OUTPUT_TOKENS;
+  const pricing = modelPricing(call.model);
+  if (!pricing) {
+    return { ok: false, truth: "unknown_price", model: call.model, input_tokens_est: inputTokens, max_output_tokens: maxOut };
+  }
   const costMax =
     inputTokens * applyBatch(pricing.inputPerMillion, pricing.batch) +
     maxOut * applyBatch(pricing.outputPerMillion, pricing.batch);

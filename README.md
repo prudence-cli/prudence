@@ -54,9 +54,10 @@ report. The whole product before a real key.
 | Command | What |
 |---|---|
 | `pru install [--port]` | Point Claude Code at the daemon |
+| `pru start [--auth-mode]` | Start the daemon (`key`, or `passthrough` for subscribers) |
 | `pru setup [--account]` | Seal a key in the system keychain (macOS) |
 | `pru start [--port]` | Start the local gateway daemon |
-| `pru budget set <usd>` | Arm a cap (session, project, or global) |
+| `pru budget set <n> [--unit]` | Arm a cap in usd, tokens, or calls |
 | `pru budget off` | Relax the watch (still counted) |
 | `pru pace set <usd>` / `pru pace off` | Bound spend per trailing minute |
 | `pru compress on` / `pru compress off` | Trim noise before billing, or not |
