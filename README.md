@@ -21,9 +21,14 @@ see "Roadmap" below.
 
 ## How it works
 
-```
-Claude Code -- ANTHROPIC_BASE_URL=localhost:8787 --> Pru --> Anthropic API
-Codex ------- OPENAI_BASE_URL=localhost:8787/v1 ---> Pru --> OpenAI-compat
+```mermaid
+flowchart LR
+    CC[Claude Code] -- "ANTHROPIC_BASE_URL=localhost:8787" --> PRU[Pru — local gateway daemon]
+    CX[Codex / OpenAI-compat] -- "OPENAI_BASE_URL=localhost:8787/v1" --> PRU
+    PRU -- "reserve → forward → reconcile" --> ANT[Anthropic API]
+    PRU --> OR[OpenAI-compat]
+    PRU <--> DB[(SQLite — the ledger)]
+    PRU -. "2am submit / 6am settle" .-> BATCH[Anthropic Batches API<br/>50% off]
 ```
 
 Each call is measured, priced inside its envelope, and reserved in one
@@ -169,6 +174,21 @@ live-fire lesson, every deviation, logged.
 | Spend "cleared" after `budget set` | It didn't — confirmation now reads the row back | `pru status` shows lifetime session spend |
 
 ## Roadmap
+
+```mermaid
+flowchart TB
+    MW[Meter Watch<br/>relay · ledger · guards · compression]:::done
+    GY[Graveyard Shift<br/>snapshot · batch · safety net · digest]:::done
+    K1[K1 keychain<br/>no raw keys]:::done
+    P1[P1 passthrough<br/>subscriber mode]:::done
+    RPT[pru report<br/>static receipt]:::done
+    DG[DOGFOOD<br/>unattended nights]:::active
+    LP[Landing + domain]:::next
+    classDef done fill:#1d2b1d,stroke:#5a8a5a,color:#e8ded0
+    classDef active fill:#3a2a12,stroke:#d08a4e,color:#e8ded0
+    classDef next fill:#161210,stroke:#5a5048,color:#a89880
+    MW --> GY --> K1 --> P1 --> RPT --> DG --> LP
+```
 
 Done and live-tested: relay, ledger, guards, compression, installer,
 night pipeline (submit → verify → commit → publish), tallies, digest,
