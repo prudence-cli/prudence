@@ -202,8 +202,14 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 > `a/ b/` + `/dev/null` (test-pinned with a live `git apply` proof).
 >
 > Next: **K1 system keychain** (plan §8), then P1 passthrough spec
-> execution. Noct: dogfood loop stays open — re-run the notes probe
-> via `graveyard --retry` to prove creation lands now.
+> execution. Dogfood loop CLOSED 2026-09-13: both probes green —
+> `nj_cbf45f19b72b` (PR #1, closed unmerged on output-quality judgment:
+> tautological tests) and `nj_e11d1a26dcf2` (NIGHT_NOTES landed `done`,
+> publish pending). Tallies total $0.42 wholesale saved. Live failure
+> modes found and fixed along the way: prefix-less diffs (prompt now
+> demands `a/ b/` + `/dev/null`), unterminated final line (runner
+> normalizes), missing node_modules (workdir install + sane PATH),
+> bare-`bun` shim (absolute path), stripped beta headers (passthrough).
 
 ### Hotfix log (2026-09-11, live fire from the MacBook Air)
 
