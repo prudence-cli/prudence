@@ -28,6 +28,7 @@ describe("pru install", () => {
       };
       expect(settings.env.ANTHROPIC_BASE_URL).toBe("http://localhost:8787");
       expect(settings.permissions.allow).toContain("Bash(pru status)");
+      expect(settings.permissions.allow).toContain("Bash(pru report)");
       for (const f of ["status.md", "nightshift.md", "graveyard.md"]) {
         expect(existsSync(join(home, ".claude", "commands", "pru", f))).toBe(true);
       }

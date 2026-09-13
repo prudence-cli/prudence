@@ -167,9 +167,10 @@ program
     }
     const env = (settings.env ?? {}) as Record<string, string>;
     settings.env = { ...env, ANTHROPIC_BASE_URL: `http://localhost:${port}` };
-    // Read-only wallet commands the slash packs invoke. Merged
-    // idempotently — existing permissions are never removed.
-    const PACK_COMMANDS = ["Bash(pru status)", "Bash(pru graveyard --digest)", "Bash(pru tallies)"];
+    // Wallet commands the slash packs invoke. Reads plus the harmless
+    // local receipt write. Merged idempotently — existing permissions
+    // are never removed. Anything booking future spend still asks.
+    const PACK_COMMANDS = ["Bash(pru status)", "Bash(pru graveyard --digest)", "Bash(pru tallies)", "Bash(pru report)"];
     const permissions = (settings.permissions ?? {}) as Record<string, unknown>;
     const allow = Array.isArray(permissions.allow) ? [...(permissions.allow as unknown[])] : [];
     let added = 0;
