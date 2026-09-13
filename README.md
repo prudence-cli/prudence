@@ -54,6 +54,7 @@ report. The whole product before a real key.
 | Command | What |
 |---|---|
 | `pru install [--port]` | Point Claude Code at the daemon |
+| `pru setup [--account]` | Seal a key in the system keychain (macOS) |
 | `pru start [--port]` | Start the local gateway daemon |
 | `pru budget set <usd>` | Arm a cap (session, project, or global) |
 | `pru budget off` | Relax the watch (still counted) |

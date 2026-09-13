@@ -2,6 +2,7 @@
 // Two implementations: AnthropicBatchClient (real API shape, live only —
 // never used in tests) and MockBatchClient (scripted, tests + demo).
 
+import { resolveUpstreamKey } from "../keys";
 export type BatchPayloadParams = {
   model: string;
   max_tokens: number;
@@ -27,7 +28,7 @@ export class AnthropicBatchClient implements BatchClient {
 
   constructor(opts?: { baseUrl?: string; apiKey?: string; version?: string }) {
     this.baseUrl = opts?.baseUrl ?? "https://api.anthropic.com";
-    const key = opts?.apiKey ?? process.env.ANTHROPIC_API_KEY ?? process.env.PRU_UPSTREAM_API_KEY;
+    const key = opts?.apiKey ?? resolveUpstreamKey();
     if (!key) {
       throw new Error("Pru needs ANTHROPIC_API_KEY to submit night batches.");
     }

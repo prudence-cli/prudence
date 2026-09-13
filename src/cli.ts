@@ -21,6 +21,13 @@ import {
   usdToMicro,
 } from "./ledger/db";
 import { createRelay, type FetchLike } from "./relay/server";
+import {
+  deleteKeychainKey,
+  getKeychainKey,
+  resolveUpstreamKey,
+  setKeychainKey,
+  type KeyAccount,
+} from "./keys";
 import { bold, coinBar, crowGrandLine, crowLine, isTTY, sleep, spinner } from "./cli/ui";
 import { snapshotRepo } from "./graveyard/snapshot";
 import { buildDiffPayload, estimateNightJob } from "./graveyard/diff_builder";
@@ -115,10 +122,7 @@ program
     }
     const upstreamBase =
       process.env.PRU_UPSTREAM_BASE_URL ?? "https://api.anthropic.com";
-    const apiKey =
-      process.env.PRU_UPSTREAM_API_KEY ??
-      process.env.ANTHROPIC_API_KEY ??
-      process.env.OPENAI_API_KEY;
+    const apiKey = resolveUpstreamKey();
     const { app } = createRelay({ upstreamBaseUrl: upstreamBase, upstreamApiKey: apiKey });
     Bun.serve({ port, fetch: app.fetch });
     console.log(`Pru is on the books at http://localhost:${port}. Upstream: ${upstreamBase}.`);
@@ -193,6 +197,53 @@ program
     );
     console.log(`For Codex and OpenAI-compat tools: export OPENAI_BASE_URL=http://localhost:${port}/v1 — or run: pru shell`);
   });
+
+program
+  .command("setup")
+  .description("Seal an upstream key in the system keychain (macOS).")
+  .option("--account <account>", "anthropic|openai", "anthropic")
+  .option("--forget", "remove the stored key instead")
+  .action((opts: { account: string; forget?: boolean }) => {
+    if (process.platform !== "darwin") {
+      console.error("Pru keychain setup is macOS-only. Elsewhere, export ANTHROPIC_API_KEY.");
+      process.exitCode = 1;
+      return;
+    }
+    const account = opts.account === "openai" ? "openai" : ("anthropic" as KeyAccount);
+    if (opts.forget) {
+      const gone = deleteKeychainKey(account);
+      console.log(gone ? `Pru forgot the ${account} key.` : `Pru found no ${account} key to forget.`);
+      return;
+    }
+    const key = promptSecret(`Paste the ${account} key (input hidden): `).trim();
+    if (!key) {
+      console.error("Pru stored nothing: empty input.");
+      process.exitCode = 1;
+      return;
+    }
+    if (!setKeychainKey(account, key)) {
+      console.error("Pru could not seal the key — keychain access was likely denied.");
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      `Pru sealed the ${account} key in your keychain. The daemon reads it at boot; ` +
+        `PRU_UPSTREAM_API_KEY still overrides everything.`,
+    );
+  });
+
+function promptSecret(label: string): string {
+  try {
+    const out = Bun.spawnSync(["sh", "-c", `printf %s "${label}" >&2; IFS= read -rs KEY < /dev/tty; printf %s "$KEY"`], {
+      stdin: "inherit",
+      stdout: "pipe",
+      stderr: "inherit",
+    });
+    return out.exitCode === 0 ? String(out.stdout ?? "") : "";
+  } catch {
+    return "";
+  }
+}
 
 program
   .command("shell")

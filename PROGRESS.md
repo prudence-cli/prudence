@@ -124,7 +124,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ✅ **DONE 2026-09-11** (42 tests green; improvement commits, regression stops — see §7 log) |
 | N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ✅ **DONE (code) 2026-09-11** (48 tests green; push verified, PR + live dogfood owner-gated — see §7 log) |
 | N4 Graveyard launch | Pro feature headline: median $ saved/night | ✅ **LANDED 2026-09-13** (live Batch API: done+verified, PR #1 open, $0.21 set aside — see §7 log) |
-| K1 System keychain | daemon reads OS-guarded secret, env handling ends | ⬜ NEXT (plan §8) |
+| K1 System keychain | daemon reads OS-guarded secret, env handling ends | ✅ **DONE 2026-09-13** (71 tests green; canary proves no secret in ledger — see §7 log) |
+| P1 Subscription passthrough | auth_mode opt-in, unit caps, token tallies | ⬜ NEXT (spec: `docs/subscription-passthrough.md`) |
 
 ---
 
@@ -191,26 +192,33 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — K1 KEYCHAIN (N4 landed live)
+## 7. ⏭️ NEXT AGENT ACTION — P1 PASSTHROUGH (K1 done, dogfood green)
 
-> **N4 evidence, 2026-09-13, live Batch API:** `nj_cbf45f19b72b`
-> submitted → settled → base PASS + night PASS → committed `cf649182`
-> → pushed → **PR #1 open** with the job report as body. First real
-> savings line booked (`night_discount` $0.21). The sibling probe
-> (`NIGHT_NOTES.md`) failed clean on a prefix-less new-file diff —
-> nothing committed, artifact kept — and the prompt now demands
-> `a/ b/` + `/dev/null` (test-pinned with a live `git apply` proof).
->
-> Next: **K1 system keychain** (plan §8), then P1 passthrough spec
-> execution, then **`pru report`** (spec: `docs/report-spec.md` —
-> static receipt HTML, no dashboard ever). Dogfood loop CLOSED 2026-09-13: both probes green —
-> `nj_cbf45f19b72b` (PR #1, closed unmerged on output-quality judgment:
-> tautological tests) and `nj_e11d1a26dcf2` (NIGHT_NOTES landed `done`,
-> publish pending). Tallies total $0.42 wholesale saved. Live failure
-> modes found and fixed along the way: prefix-less diffs (prompt now
-> demands `a/ b/` + `/dev/null`), unterminated final line (runner
-> normalizes), missing node_modules (workdir install + sane PATH),
-> bare-`bun` shim (absolute path), stripped beta headers (passthrough).
+> Execute **P1 subscription passthrough** per
+> `docs/subscription-passthrough.md` §7 (five acceptance criteria).
+> K1 is the foundation (resolution order already keychain-aware).
+
+### K1 close-out log (2026-09-13, owner: agent session)
+
+- Built: `src/keys.ts` (namespaced service `cli.prudence.upstream`,
+  read/write/forget via `security`, resolution pinned:
+  `PRU_UPSTREAM_API_KEY` → keychain → legacy env — with no keychain
+  entries this reduces exactly to old behavior, dogfood untouched);
+  daemon + batch client resolve through it; `pru setup` (hidden prompt,
+  macOS-only with env guidance elsewhere) + `--forget`.
+- Verified: `bun run check` 71 pass — order, fallback, fail-closed
+  with nothing configured, service-name namespacing, and a canary
+  test (configured secret appears in zero ledger bytes and zero
+  refusal output). No real keychain writes in tests, ever.
+- Rule refined: the CLI ceiling lost its number ("under ten") — the
+  load-bearing part was always "no competing harness," and `setup`
+  made ten eleven. Intent intact, count retired.
+
+> N4 evidence retained: `nj_cbf45f19b72b` landed PR #1 (closed unmerged
+> on output-quality judgment); `nj_e11d1a26dcf2` landed `done`; tallies
+> $0.42. Live failure modes fixed along the way: prefix-less diffs,
+> unterminated final line, missing node_modules, bare-`bun` shim,
+> stripped beta headers.
 
 ### Hotfix log (2026-09-11, live fire from the MacBook Air)
 
