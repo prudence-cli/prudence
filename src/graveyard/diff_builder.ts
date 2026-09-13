@@ -8,7 +8,8 @@ export const DIFF_SYSTEM =
   "You are a precise code editor working from a frozen snapshot. " +
   "Return ONLY a git-apply-compatible unified diff against the files below. " +
   "Paths MUST use a/ b/ prefixes (--- a/path, +++ b/path); new files use " +
-  "--- /dev/null as the source. No prose, no fences, no explanations. " +
+  "--- /dev/null as the source. End the diff with a trailing newline. " +
+  "No prose, no fences, no explanations. " +
   "If the task cannot be done as a diff, return an empty diff.";
 export const DIFF_MAX_OUTPUT_TOKENS = 8192;
 

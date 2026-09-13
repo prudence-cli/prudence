@@ -3,13 +3,13 @@
 
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { snapshotRepo, SNAPSHOT_MAX_CHARS } from "../src/graveyard/snapshot";
 import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../src/graveyard/diff_builder";
 import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
-import { installWorkdirDeps, retryNightJob, runDueJobs } from "../src/graveyard/runner";
+import { installWorkdirDeps, retryNightJob, runDueJobs, normalizeDiffFile } from "../src/graveyard/runner";
 import { publishNightJob } from "../src/graveyard/publish";
 import { agentLabel, graveyardPlist, scheduleGraveyard, unscheduleGraveyard, nextWakeDates, fmtPmset } from "../src/graveyard/schedule";
 import { buildDigest } from "../src/graveyard/digest";
@@ -127,6 +127,25 @@ describe("diff builder + 50% math", () => {
       execFileSync("git", ["apply", "--check", "-"], { cwd: dir, input: diff, stdio: ["pipe", "ignore", "ignore"] });
       execFileSync("git", ["apply", "-"], { cwd: dir, input: diff, stdio: ["pipe", "ignore", "ignore"] });
       expect(existsSync(join(dir, "NIGHT_NOTES.md"))).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("unterminated final line is normalized, not fatal (live-fire follow-up)", () => {
+    // The model's one-giant-line output ended mid-byte: exit-128 corruption
+    // to git-apply, zero semantic content. normalizeDiffFile heals it.
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    try {
+      const raw = "--- /dev/null\n+++ b/NIGHT_NOTES.md\n@@ -0,0 +1 @@\n+hello night";
+      expect(() =>
+        execFileSync("git", ["apply", "--check", "-"], { cwd: dir, input: raw, stdio: ["pipe", "ignore", "ignore"] }),
+      ).toThrow();
+      const file = join(dir, "raw.diff");
+      writeFileSync(file, raw);
+      normalizeDiffFile(file);
+      execFileSync("git", ["apply", "--check", file], { cwd: dir, stdio: ["ignore", "ignore", "ignore"] });
+      expect(readFileSync(file, "utf8").endsWith("\n")).toBe(true);
     } finally {
       cleanup(dir);
     }

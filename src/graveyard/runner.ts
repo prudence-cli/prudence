@@ -4,7 +4,7 @@
 // night branch and the two results are compared (the safety net).
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
@@ -75,7 +75,15 @@ function jobDir(workRoot: string, jobId: string): string {
   return dir;
 }
 
+// A missing trailing newline is exit-128 corruption to git-apply, never
+// meaning. Normalize in place so the kept artifact is exactly what passed.
+export function normalizeDiffFile(diffPath: string): void {
+  const text = readFileSync(diffPath, "utf8");
+  if (!text.endsWith("\n")) writeFileSync(diffPath, text + "\n");
+}
+
 function cloneBundle(bundlePath: string, dest: string, baseSha: string): void {
+
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
   sh(dest, "git", "clone", "-q", bundlePath, ".");
@@ -159,6 +167,9 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
   writeFileSync(join(dir, "result.diff"), diff);
 
   cloneBundle(job.repo_snapshot, work, job.base_sha);
+  // A missing trailing newline is exit-128 corruption to git-apply, never
+  // meaning. Normalize the artifact itself so what we judge is what we keep.
+  normalizeDiffFile(join(dir, "result.diff"));
   try {
     sh(work, "git", "apply", "--check", join(dir, "result.diff"));
   } catch {
