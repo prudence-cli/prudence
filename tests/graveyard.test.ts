@@ -106,11 +106,27 @@ describe("diff builder + 50% math", () => {
       const payload = buildDiffPayload(snap, "Add tests for a.", "claude-sonnet-4-5");
       expect(payload.model).toBe("claude-sonnet-4-5");
       expect(payload.system).toContain("ONLY");
+      expect(payload.system).toContain("a/ b/");
+      expect(payload.system).toContain("/dev/null");
       expect(payload.user).toContain("Add tests for a.");
       expect(payload.user).toContain("export const a = 1;");
       expect(payload.user).toContain(snap.base_sha);
       expect(payload.max_output_tokens).toBe(DIFF_MAX_OUTPUT_TOKENS);
       rmSync(snap.bundle_path, { force: true });
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("the demanded new-file shape applies cleanly (live-fire follow-up)", () => {
+    const dir = makeRepo({ "src/a.ts": "export const a = 1;\n" });
+    try {
+      // The exact shape a model must now emit for new files; the NIGHT_NOTES
+      // probe died for lack of the a/ b/ prefixes.
+      const diff = "--- /dev/null\n+++ b/NIGHT_NOTES.md\n@@ -0,0 +1 @@\n+hello night\n";
+      execFileSync("git", ["apply", "--check", "-"], { cwd: dir, input: diff, stdio: ["pipe", "ignore", "ignore"] });
+      execFileSync("git", ["apply", "-"], { cwd: dir, input: diff, stdio: ["pipe", "ignore", "ignore"] });
+      expect(existsSync(join(dir, "NIGHT_NOTES.md"))).toBe(true);
     } finally {
       cleanup(dir);
     }

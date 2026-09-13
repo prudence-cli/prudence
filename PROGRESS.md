@@ -123,7 +123,8 @@ v0.1 acceptance: (a) replay determinism, (b) loud typed 429 reproducible against
 | N1 Graveyard: snapshot + diff builder | snapshotter, diff payload, 50%-priced estimate, queued jobs | ✅ **DONE 2026-09-11** (36 tests green; live-repo smoke $0.19 vs $0.38 — see §7 log) |
 | N2 Graveyard: batch client + safety net | 2am submit, 6am poll, apply --check, test compare | ✅ **DONE 2026-09-11** (42 tests green; improvement commits, regression stops — see §7 log) |
 | N3 Graveyard: report + auto-PR | morning digest, tally math, push/PR, dogfood overnight | ✅ **DONE (code) 2026-09-11** (48 tests green; push verified, PR + live dogfood owner-gated — see §7 log) |
-| N4 Graveyard launch | Pro feature headline: median $ saved/night | ⬜ NEXT (needs live dogfood first) |
+| N4 Graveyard launch | Pro feature headline: median $ saved/night | ✅ **LANDED 2026-09-13** (live Batch API: done+verified, PR #1 open, $0.21 set aside — see §7 log) |
+| K1 System keychain | daemon reads OS-guarded secret, env handling ends | ⬜ NEXT (plan §8) |
 
 ---
 
@@ -190,19 +191,19 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — N4 + LIVE DOGFOOD (N3 code done, hotfix shipped)
+## 7. ⏭️ NEXT AGENT ACTION — K1 KEYCHAIN (N4 landed live)
 
-> **N3 code is done.** What remains is live proof, and it needs the owner:
-> queue a real non-urgent task, let the 2am tick submit it against the
-> Batch API (owner keys), and wake to the digest + PR. One unassisted
-> overnight landing is the N4 gate; the headline writes itself after that
-> (median $ saved/night).
+> **N4 evidence, 2026-09-13, live Batch API:** `nj_cbf45f19b72b`
+> submitted → settled → base PASS + night PASS → committed `cf649182`
+> → pushed → **PR #1 open** with the job report as body. First real
+> savings line booked (`night_discount` $0.21). The sibling probe
+> (`NIGHT_NOTES.md`) failed clean on a prefix-less new-file diff —
+> nothing committed, artifact kept — and the prompt now demands
+> `a/ b/` + `/dev/null` (test-pinned with a live `git apply` proof).
 >
-> Until then: no new tracks. Polish only on dogfood evidence.
->
-> Sequenced after the dogfood lands (plan §8, locked): **K1 system
-> keychain instead of env vars**, then **P1 subscription passthrough**
-> (spec: `docs/subscription-passthrough.md`). Owner-directed 2026-09-11.
+> Next: **K1 system keychain** (plan §8), then P1 passthrough spec
+> execution. Noct: dogfood loop stays open — re-run the notes probe
+> via `graveyard --retry` to prove creation lands now.
 
 ### Hotfix log (2026-09-11, live fire from the MacBook Air)
 
