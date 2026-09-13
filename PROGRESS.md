@@ -193,12 +193,25 @@ Compete on guarding by matching; win on bookkeeping by default. F0 fatals = laun
 
 ---
 
-## 7. ⏭️ NEXT AGENT ACTION — OPEN TRACKS (K1 + P1 + report done)
+## 7. ⏭️ NEXT AGENT ACTION — OPEN TRACKS (K1 + P1 + report done, landscape refreshed)
 
 > K1, P1, and `pru report` are built and green (77 tests). Open threads,
-> all owner-side: live dogfood nights, N4 merge(s), landing/domain,
+> all owner-side: live dogfood nights, N4 merges, landing/domain,
 > synthetic-fixture swap. Next build only on owner direction or fresh
 > dogfood evidence.
+
+### Landscape refresh (2026-09-13, §0 standing rule)
+
+- Full re-decision in `docs/landscape-refresh-2026-09.md`. Headlines:
+  Anthropic ships enterprise gateway caps (solo lane untouched);
+  Codex ships opt-in token budgets (our `--unit tokens` now parity,
+  dollars still open); ACP validates passthrough independently;
+  enforcement is commodity (LoopBudget/Terse/costfuse/AgentCostFirewall
+  et al) — the bundle (batch + tallies + in-pane) is the product;
+  Runcap steady at v0.6, moats unclaimed.
+- Steal queue: compliance language, pricing feed. No plan change.
+- Launch line sharpened: everyone guards calls or bills teams; Pru
+  keeps books and halves the night bill.
 
 ### Report close-out log (2026-09-13, owner: agent session)
 
