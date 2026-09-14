@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { snapshotRepo, SNAPSHOT_MAX_CHARS } from "../src/graveyard/snapshot";
-import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "../src/graveyard/diff_builder";
+import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob, sanitizeDiff } from "../src/graveyard/diff_builder";
 import { MockBatchClient, extractDiffForJob } from "../src/graveyard/batch_client";
 import { installWorkdirDeps, retryNightJob, runDueJobs, normalizeDiffFile } from "../src/graveyard/runner";
 import { publishNightJob } from "../src/graveyard/publish";
@@ -149,6 +149,38 @@ describe("diff builder + 50% math", () => {
     } finally {
       cleanup(dir);
     }
+  });
+
+  test("prose preamble is stripped, diff survives (live-fire specimen)", () => {
+    // nj_b8f98bb6e7ac died on exactly this: a chatty first line before an
+    // otherwise valid new-file diff.
+    const raw =
+      "I'll add one-paragraph docstring headers for each export in `src/ledger/pricing.ts`.\n" +
+      "\n" +
+      "--- a/src/ledger/pricing.ts\n" +
+      "+++ b/src/ledger/pricing.ts\n" +
+      "@@ -1,2 +1,3 @@\n" +
+      " // line one\n" +
+      "+// Added header.\n" +
+      " // line two\n";
+    const clean = sanitizeDiff(raw);
+    expect(clean.startsWith("--- a/src/ledger/pricing.ts")).toBe(true);
+    expect(clean).toContain("+// Added header.");
+    const dir = makeRepo({ "src/ledger/pricing.ts": "// line one\n// line two\n" });
+    try {
+      execFileSync("git", ["apply", "--check", "-"], { cwd: dir, input: clean, stdio: ["pipe", "ignore", "ignore"] });
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("fenced and trailing prose are stripped, clean diffs pass through", () => {
+    const body = "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n";
+    const fenced = "Here you go:\n```diff\n" + body + "```\nHope that helps!";
+    expect(sanitizeDiff(fenced)).toBe(body);
+    expect(sanitizeDiff(body + "\nAll done, let me know!")).toBe(body);
+    expect(sanitizeDiff(body)).toBe(body);
+    expect(sanitizeDiff("just prose, no diff")).toBe("");
   });
 
   test("batch estimate is half the standard price", () => {

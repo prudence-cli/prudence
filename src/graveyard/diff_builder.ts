@@ -56,3 +56,27 @@ export function estimateNightJob(payload: DiffPayload): NightEstimate | null {
     saved_micro_usd: Math.max(0, standard - batch),
   };
 }
+
+const DIFF_START = /^(diff --git |--- )/;
+const DIFF_LINE =
+  /^(diff --git |--- |\+\+\+ |@@ |[ +-]|\\|index |old mode|new mode|new file mode|deleted file mode|Binary |$)/;
+
+// Live-fire lesson: models wrap diffs in prose despite the system prompt
+// ("I'll add headers…" preamble killed a real night). Sanitizing transport
+// violations is safe — `git apply --check` plus the test comparison still
+// judge the content. Anything unsalvageable stays a conflict.
+export function sanitizeDiff(raw: string): string {
+  let text = String(raw ?? "");
+  // Fenced block? Take the inside.
+  const fence = text.match(/```(?:diff|patch)?\s*\n([\s\S]*?)\n```/);
+  if (fence) text = fence[1];
+  const lines = text.split("\n");
+  let start = 0;
+  while (start < lines.length && !DIFF_START.test(lines[start])) start += 1;
+  if (start >= lines.length) return "";
+  // Trailing blank lines are never meaningful at diff end; drop them along
+  // with any trailing prose so the artifact ends on content.
+  let end = lines.length;
+  while (end > start && (lines[end - 1] === "" || !DIFF_LINE.test(lines[end - 1]))) end -= 1;
+  return lines.slice(start, end).join("\n") + "\n";
+}

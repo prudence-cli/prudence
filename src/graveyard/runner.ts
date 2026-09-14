@@ -16,7 +16,7 @@ import {
   updateNightJob,
   type NightJobRow,
 } from "../ledger/db";
-import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob } from "./diff_builder";
+import { buildDiffPayload, DIFF_MAX_OUTPUT_TOKENS, estimateNightJob, sanitizeDiff } from "./diff_builder";
 import { extractDiffForJob, type BatchClient } from "./batch_client";
 import { readTextFiles, snapshotRepo } from "./snapshot";
 
@@ -164,7 +164,9 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
       `# Night job ${job.id} — failed\n\nTask: ${job.task_prompt}\n\nThe batch result was unusable (no single diff for this job). Nothing applied, nothing committed.`,
     );
   }
-  writeFileSync(join(dir, "result.diff"), diff);
+  writeFileSync(join(dir, "result-raw.diff"), diff);
+  const clean = sanitizeDiff(diff);
+  writeFileSync(join(dir, "result.diff"), clean);
 
   cloneBundle(job.repo_snapshot, work, job.base_sha);
   // A missing trailing newline is exit-128 corruption to git-apply, never
@@ -176,7 +178,7 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
     return finish(
       db, job, dir, "conflict",
       `# Night job ${job.id} — conflict\n\nTask: ${job.task_prompt}\n\nThe night diff does not apply to ${job.base_sha.slice(0, 8)} (` +
-        `\`git apply --check\` failed). The raw diff is kept at \`result.diff\`; nothing committed.`,
+        `\`git apply --check\` failed). The model output is kept at \`result-raw.diff\`, sanitized attempt at \`result.diff\`; nothing committed.`,
     );
   }
 
@@ -199,7 +201,7 @@ async function settleJob(db: Database, job: NightJobRow, opts: RunOpts): Promise
   } catch {
     return finish(
       db, job, dir, "conflict",
-      `# Night job ${job.id} — conflict\n\nTask: ${job.task_prompt}\n\nThe diff passed \`--check\` but failed to apply. Raw diff kept at \`result.diff\`; nothing committed.`,
+      `# Night job ${job.id} — conflict\n\nTask: ${job.task_prompt}\n\nThe diff passed \`--check\` but failed to apply. Model output kept at \`result-raw.diff\`; nothing committed.`,
     );
   }
   const night = shPass(work, opts.testCommand);
